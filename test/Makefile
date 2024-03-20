@@ -12,11 +12,19 @@ HEX32=$(addsuffix .hex,$(ELF32))
 HEX64=$(addsuffix .hex,$(ELF64))
 ELF2HEX=../elf2hex
 
+SOURCESV=$(notdir $(wildcard $(SRCDIR)/vector/*.c))
+TESTSV=$(basename $(SOURCESV))
+ELFV=$(addprefix build/,$(TESTSV))
+ELF64V=$(addsuffix 64v,$(ELFV))
+HEX64V=$(addsuffix .hex, $(ELF64V))
+
+
 RISCVCC64=riscv-none-embed-gcc -march=rv64im -mabi=lp64 -static -nostdlib -nostartfiles -mcmodel=medany
 RISCVCC32=riscv-none-embed-gcc -march=rv32im -mabi=ilp32 -static -nostdlib -nostartfiles -mcmodel=medany
+RISCVCC64V=riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64 -static -nostdlib -nostartfiles -mcmodel=medany
 
-all: $(HEX32) $(HEX64)
-all64: $(HEX64)
+all: $(HEX32) $(HEX64) $(HEX64V)
+all64: $(HEX64) 
 
 $(ELF2HEX)/elf2hex:
 	$(MAKE) -C $(ELF2HEX)
@@ -42,11 +50,17 @@ init32.o: init.S
 init64.o: init.S
 	$(RISCVCC64) -c init.S -o init64.o
 
+init64v.o: init.S
+	$(RISCVCC64V) -c init.S -o init64v.o
+
 mmio32.o: mmio.c
 	$(RISCVCC32) -c mmio.c -o mmio32.o
 
 mmio64.o: mmio.c
 	$(RISCVCC64) -c mmio.c -o mmio64.o
+
+mmio64v.o: mmio.c
+	$(RISCVCC64V) -c mmio.c -o mmio64v.o
 
 $(BUILDDIR)/%32.hex: $(ELF2HEX)/elf2hex $(SRCDIR)/%.c init32.o mmio32.o mmio.ld
 	mkdir -p $(BUILDDIR)
@@ -63,7 +77,16 @@ $(BUILDDIR)/%64.hex: $(ELF2HEX)/elf2hex $(SRCDIR)/%.c init64.o mmio64.o mmio.ld
 	rm intermediate64.o
 
 
+$(BUILDDIR)/%64v.hex: $(ELF2HEX)/elf2hex $(SRCDIR)/vector/%.c init64v.o mmio64v.o mmio.ld
+	mkdir -p $(BUILDDIR)
+	$(RISCVCC64V) -c $(SRCDIR)/vector/$*.c -o intermediate64v.o
+	$(RISCVCC64V) -o $(BUILDDIR)/$*64v -Tmmio.ld intermediate64v.o init64v.o mmio64v.o
+	$(ELF2HEX)/elf2hex $(BUILDDIR)/$*64v 0 16G $(BUILDDIR)/$*64v.hex
+	rm intermediate64v.o
+
+
 clean:
 	rm -f intermediate32.o init32.o mmio32.o
 	rm -f intermediate64.o init64.o mmio64.o
+	rm -f intermediate64v.o init64v.o mmio64v.o
 	rm -rf build
