@@ -113,6 +113,57 @@ executables:
       - Utility.MapMemory
       - Utility.Utility
 
+
+  riscv-semantics-v:
+    main:             Platform/MainRunV.hs
+    ghc-options:         -fexpose-all-unfoldings -fspecialise-aggressively -funfolding-use-threshold=50 -funfolding-creation-threshold=100 -fstatic-argument-transformation -O2 -optc-O3 -threaded
+    source-dirs:      src
+    other-modules:
+      - Platform.BufferMMIO
+      - Platform.Clint
+      - Platform.CleanTest
+      - Platform.MemoryModelTracking
+      - Platform.Minimal32
+      - Platform.Minimal64
+      - Platform.Minimal64V
+      - Platform.MMIO
+      - Platform.Plic
+      - Platform.Pty
+      - Platform.Run
+      - Platform.Run32
+      - Platform.RunCompliance
+      - Platform.RunFast
+      - Platform.RunMM
+      - Platform.RunV
+      - Platform.Test
+      - Spec.CSR
+      - Spec.CSRField
+      - Spec.CSRFile
+      - Spec.CSRFileIO
+      - Spec.CSRSpec
+      - Spec.CSRGetSet
+      - Spec.Decode
+      - Spec.Execute
+      - Spec.Execute32
+      - Spec.ExecuteA
+      - Spec.ExecuteA64
+      - Spec.ExecuteCSR
+      - Spec.ExecuteF
+      - Spec.ExecuteF64
+      - Spec.ExecuteI
+      - Spec.ExecuteI64
+      - Spec.ExecuteM
+      - Spec.ExecuteM64
+      - Spec.ExecuteV
+      - Spec.Machine
+      - Spec.Memory
+      - Spec.Spec
+      - Spec.VirtualMemory
+      - Utility.Elf
+      - Utility.ListMemory
+      - Utility.MapMemory
+      - Utility.Utility
+
   riscv-semantics-rv32im-compliance:
     main:             Platform/MainCompliance.hs
     ghc-options:         -threaded

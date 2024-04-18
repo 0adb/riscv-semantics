@@ -26,7 +26,10 @@ data CSRField = MXL | Extensions | -- misa
                 SCauseInterrupt | SCauseCode | -- scause
                 STVal | -- stval
                 MODE | ASID | PPN | -- satp
-                FFlags | FRM -- fflags, frm, fcsr
+                FFlags | FRM | -- fflags, frm, fcsr
+                VStart | VL | 
+                VIll | VMA | VTA | VSEW | VLMul | -- vtype
+                VLenB
   deriving (Ord, Ix, Eq, Show)
 
 -- WPRI is implicit in a field's lack of existence here.

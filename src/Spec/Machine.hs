@@ -44,6 +44,8 @@ class (Monad p, MachineWidth t) => RiscvMachine p t | p -> t where
   -- TODO: Another typeclass parameter for floating-point width?
   getFPRegister :: FPRegister -> p Int32
   setFPRegister :: FPRegister -> Int32 -> p ()
+  getVRegister :: VRegister -> p [Int8]
+  setVRegister :: VRegister -> [Int8] -> p ()
   loadByte :: SourceType -> t -> p Int8
   loadHalf :: SourceType -> t -> p Int16
   loadWord :: SourceType -> t -> p Int32
@@ -114,6 +116,9 @@ setCSRField field value = do
 instance (RiscvMachine p t) => RiscvMachine (MaybeT p) t where
   getRegister r = lift (getRegister r)
   setRegister r v = lift (setRegister r v)
+  
+  getVRegister r = lift (getVRegister r) -- UNCLEAR IF CORRECT. 
+  setVRegister r v = lift (setVRegister r v) -- UNCLEAR IF CORRECT.
   getFPRegister r = lift (getFPRegister r)
   setFPRegister r v = lift (setFPRegister r v)
   loadByte s a = lift (loadByte s a)

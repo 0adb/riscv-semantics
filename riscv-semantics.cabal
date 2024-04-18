@@ -1,10 +1,8 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
+-- This file has been generated from package.yaml by hpack version 0.36.0.
 --
 -- see: https://github.com/sol/hpack
---
--- hash: 428448078ae45c86903d5ae821cc4be5aaeec937a2e16df7bdb0b983bcccbd8d
 
 name:           riscv-semantics
 version:        0.1.0.0
@@ -255,6 +253,77 @@ executable riscv-semantics-tests
   hs-source-dirs:
       src
   ghc-options: -threaded
+  build-depends:
+      array >=0.5.2
+    , async >=2.2
+    , base >=4.9 && <5
+    , bytestring
+    , containers
+    , directory
+    , elf >=0.30
+    , filepath
+    , ilist >=0.3
+    , mtl >=2.2 && <2.4
+    , nondeterminism >=1.4
+    , parsec
+    , prettyprinter >=1.2
+    , process >=1.6
+    , softfloat-hs ==0.1.0
+    , text >=1.2
+    , transformers ==0.5.*
+    , unix >=2.7
+  default-language: Haskell2010
+
+executable riscv-semantics-v
+  main-is: Platform/MainRunV.hs
+  other-modules:
+      Platform.BufferMMIO
+      Platform.Clint
+      Platform.CleanTest
+      Platform.MemoryModelTracking
+      Platform.Minimal32
+      Platform.Minimal64
+      Platform.Minimal64V
+      Platform.MMIO
+      Platform.Plic
+      Platform.Pty
+      Platform.Run
+      Platform.Run32
+      Platform.RunCompliance
+      Platform.RunFast
+      Platform.RunMM
+      Platform.RunV
+      Platform.Test
+      Spec.CSR
+      Spec.CSRField
+      Spec.CSRFile
+      Spec.CSRFileIO
+      Spec.CSRSpec
+      Spec.CSRGetSet
+      Spec.Decode
+      Spec.Execute
+      Spec.Execute32
+      Spec.ExecuteA
+      Spec.ExecuteA64
+      Spec.ExecuteCSR
+      Spec.ExecuteF
+      Spec.ExecuteF64
+      Spec.ExecuteI
+      Spec.ExecuteI64
+      Spec.ExecuteM
+      Spec.ExecuteM64
+      Spec.ExecuteV
+      Spec.Machine
+      Spec.Memory
+      Spec.Spec
+      Spec.VirtualMemory
+      Utility.Elf
+      Utility.ListMemory
+      Utility.MapMemory
+      Utility.Utility
+  hs-source-dirs:
+      src
+  ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -funfolding-use-threshold=50 -funfolding-creation-threshold=100 -fstatic-argument-transformation -O2 -optc-O3 -threaded
   build-depends:
       array >=0.5.2
     , async >=2.2

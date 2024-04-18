@@ -11,8 +11,8 @@ import Spec.ExecuteA64 as A64
 import Spec.ExecuteF as F
 import Spec.ExecuteF64 as F64
 import Spec.ExecuteCSR as CSR
-
-
+import Spec.ExecuteV as V
+import Debug.Trace
 -- Note: instructions belonging to unsupported extensions were already filtered out by the decoder
 execute :: (RiscvMachine p t) => Instruction -> p ()
 execute inst = do
@@ -26,6 +26,7 @@ execute inst = do
     A64Instruction i     -> A64.execute i
     F64Instruction i     -> F64.execute i
     CSRInstruction i     -> CSR.execute i
+    VInstruction i       -> trace ("vector instruction: " ++ show i) $ (V.execute i)
     InvalidInstruction i -> raiseExceptionWithInfo 0 2 i
   cycles <- getCSRField Field.MCycle
   setCSRField Field.MCycle (cycles + 1)

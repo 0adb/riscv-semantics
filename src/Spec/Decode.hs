@@ -184,7 +184,20 @@ data InstructionF64 =
   Fcvt_s_lu { rd :: FPRegister, rs1 :: Register, rm :: RoundMode } |
   InvalidF64
   deriving (Eq, Read, Show)
-
+  
+data InstructionV =
+  Vle { width :: MachineInt, vd :: VRegister, rs1 :: Register,
+        vm :: MachineInt} |
+  Vse { width :: MachineInt, vs3 :: VRegister, rs1 :: Register,
+        vm :: MachineInt} |
+  Vlr { vd :: VRegister, rs1 :: Register,
+        nf :: MachineInt } | 
+  Vsr { vs3 :: VRegister, rs1 :: Register,
+        nf :: MachineInt } |
+  Vsetvli { rd :: Register, rs1 :: Register, vtypei :: MachineInt } |	
+  Vsetivli { rd :: Register, uimm :: MachineInt, vtypei :: MachineInt } |	
+  Vsetvl { rd :: Register, rs1 :: Register, rs2 :: Register } |	
+  InvalidV deriving (Eq, Read, Show)
 
 data InstructionCSR =
   Ecall |
@@ -203,7 +216,6 @@ data InstructionCSR =
   InvalidCSR
   deriving (Eq, Read, Show)
 
-
 data Instruction =
   IInstruction   { iInstruction   :: InstructionI   } |
   MInstruction   { mInstruction   :: InstructionM   } |
@@ -214,6 +226,7 @@ data Instruction =
   A64Instruction { a64Instruction :: InstructionA64 } |
   F64Instruction { f64Instruction :: InstructionF64 } |
   CSRInstruction { csrInstruction :: InstructionCSR } |
+  VInstruction   { vInstruction   :: InstructionV   } |
   InvalidInstruction { inst :: MachineInt }
   deriving (Eq, Read, Show)
 
@@ -222,7 +235,8 @@ data Instruction =
 -- TODO: Switch to a representation that doesn't involve enumerating all the
 -- combinatoric possibilities; possibily the one used by the MISA CSR.
 data InstructionSet = RV32I | RV32IM | RV32IA | RV32IMA | RV32IF | RV32IMF | RV32IAF | RV32IMAF |
-                      RV64I | RV64IM | RV64IA | RV64IMA | RV64IF | RV64IMF | RV64IAF | RV64IMAF
+                      RV64I | RV64IM | RV64IA | RV64IMA | RV64IF | RV64IMF | RV64IAF | RV64IMAF | 
+                      RV64IMV 
   deriving (Eq, Show)
 
 bitwidth :: InstructionSet -> Int
@@ -242,6 +256,7 @@ bitwidth RV64IF = 64
 bitwidth RV64IMF = 64
 bitwidth RV64IAF = 64
 bitwidth RV64IMAF = 64
+bitwidth RV64IMV = 64
 
 supportsM :: InstructionSet -> Bool
 supportsM RV32IM = True
@@ -252,6 +267,7 @@ supportsM RV64IM = True
 supportsM RV64IMA = True
 supportsM RV64IMF = True
 supportsM RV64IMAF = True
+supportsM RV64IMV = True
 supportsM _ = False
 
 supportsA :: InstructionSet -> Bool
@@ -276,11 +292,17 @@ supportsF RV64IAF = True
 supportsF RV64IMAF = True
 supportsF _ = False
 
+supportsV :: InstructionSet ->  Bool
+supportsV RV64IMV = True
+supportsV _ = False
+
 -- ================================================================
 
 type Register = MachineInt
 type FPRegister = MachineInt
 type RoundMode = MachineInt
+type VRegister = MachineInt
+
 
 -- ================================================================
 -- Instruction bit fields
@@ -312,6 +334,8 @@ opcode_BRANCH    :: Opcode;    opcode_BRANCH    = 0b1100011
 opcode_JALR      :: Opcode;    opcode_JALR      = 0b1100111
 opcode_JAL       :: Opcode;    opcode_JAL       = 0b1101111
 opcode_SYSTEM    :: Opcode;    opcode_SYSTEM    = 0b1110011
+
+opcode_OP_V      :: Opcode;    opcode_OP_V         = 0b1010111
 
 -- LOAD sub-opcodes
 funct3_LB  :: MachineInt;    funct3_LB  = 0b000
@@ -533,6 +557,9 @@ rs2_FCVT_LU_S = 0b00011 :: MachineInt
 -- MADD, MSUB, NMSUB, NMADD sub-opcodes, F standard extension
 funct2_FMADD_S = 0b00
 
+-- opcodes, V standard extension
+funct3_VSETVLI = 0b111 :: MachineInt
+
 -- ================================================================
 -- Identification of valid instructions in extensions
 
@@ -545,6 +572,7 @@ isValidA64 inst = inst /= InvalidA64
 isValidF inst = inst /= InvalidF
 isValidF64 inst = inst /= InvalidF64
 isValidCSR inst = inst /= InvalidCSR
+isValidV inst = inst /= InvalidV
 
 head_default :: [ a ] -> a -> a
 head_default [] v = v
@@ -574,6 +602,7 @@ decode iset inst =
       (if bitwidth iset == 64 && supportsM iset then resultM64 else []) ++
       (if bitwidth iset == 64 && supportsA iset then resultA64 else []) ++
       (if bitwidth iset == 64 && supportsF iset then resultF64 else []) ++
+      (if bitwidth iset == 64 && supportsV iset then resultV else []) ++
       resultCSR
 
     resultI = if isValidI decodeI then [IInstruction decodeI] else []
@@ -585,6 +614,7 @@ decode iset inst =
     resultA64 = if isValidA64 decodeA64 then [A64Instruction decodeA64] else []
     resultF64 = if isValidF64 decodeF64 then [F64Instruction decodeF64] else []
     resultCSR = if isValidCSR decodeCSR then [CSRInstruction decodeCSR] else []
+    resultV = if isValidV decodeV then [VInstruction decodeV] else []
 
     -- Symbolic names for notable bitfields in the 32b instruction 'inst'
     -- Note: 'bitSlice x i j' is, roughly, Verilog's 'x [j-1, i]'
@@ -635,6 +665,19 @@ decode iset inst =
 
     funct5  = bitSlice inst 27 32    -- for A extension
     aqrl    = bitSlice inst 25 27    -- for A extension
+
+    zimm11  = bitSlice inst 20 31    -- for V extension, VSETVLI
+    vs3     = bitSlice inst 7 12     -- V extension, store data
+    vd      = vs3                    -- V extension, load destination
+    width   = bitSlice inst 12 15    -- V extension, element width
+    vs2     = rs2                    -- V extension, address offsets
+    sumop   = rs2                    -- V extension, unit-stride store variant
+    lumop   = rs2                    -- V extension, unit-stride load variant
+    vm      = bitSlice inst 25 26    -- V extension, 1 = mask disabled, 0 = mask enabled
+    mop     = bitSlice inst 26 28    -- V extension, memory addressing mode
+    mew     = bitSlice inst 28 29    -- V extension, memory element width
+    nf      = bitSlice inst 29 32    -- V extension, number of fields
+    zimm10  = bitSlice inst 20 30    -- V extension, VSETIVLI
 
     decodeI
       | opcode==opcode_LOAD, funct3==funct3_LB  = Lb  rd rs1 oimm12
@@ -811,4 +854,15 @@ decode iset inst =
       | opcode==opcode_SYSTEM, funct3==funct3_CSRRCI = Csrrci rd zimm csr12
       | True = InvalidCSR
 
+    decodeV
+      | opcode==opcode_OP_V, funct3==funct3_VSETVLI, (bitSlice inst 31 32)==0b0 = Vsetvli rd rs1 zimm11
+      | opcode==opcode_OP_V, funct3==funct3_VSETVLI, (bitSlice inst 30 32)==0b11 = Vsetivli rd rs1 zimm10
+      -- Note: unclear if I should rename rs1 in Vsetivli to uimm. It's the right bitslice
+      -- but semantically means something else.
+      | opcode==opcode_OP_V, funct3==funct3_VSETVLI, (bitSlice inst 31 32)==0b1, (bitSlice inst 25 31)==0b000000 = Vsetvl rd rs1 rs2
+      | opcode==opcode_LOAD_FP, mop==0b00, lumop==0b00000 = Vle width vd rs1 vm
+      | opcode==opcode_LOAD_FP, mop==0b00, lumop==0b01000 = Vlr vd rs1 nf
+      | opcode==opcode_STORE_FP, mop==0b00, sumop==0b00000 = Vse width vs3 rs1 vm
+      | opcode==opcode_STORE_FP, mop==0b00, lumop==0b01000 = Vsr vd rs1 nf
+      | True = InvalidV
 -- ================================================================

@@ -5,7 +5,8 @@ uname="$(uname -s)"
 unameM="$(uname -m)"
 repoUrl="https://github.com/riscv-collab/riscv-gnu-toolchain.git"
 repoTag="2024.03.01"
-binFile="todo"
+installPath=riscv-gnu-toolchain/riscv64-unknown-elf
+binFile=$installPath/bin/riscv64-unknown-elf-gcc
 if [ -e $binFile ]
 then
     echo "Riscv-gcc has been installed."
@@ -51,7 +52,7 @@ baseDir="$(pwd)"
 cd $tempSourceFolder
 startTime=$(date)
 echo "About to make compiler. Takes ~1.5 hours."
-./configure --prefix="$baseDir/$gccFolder/riscv64-unknown-elf" --with-arch=rv64gcv --with-abi=lp64 
+./configure --prefix="$baseDir/$gccFolder/riscv64-unknown-elf" --with-arch=rv64imv --with-abi=lp64 
 make
 #./configure --prefix="$baseDir/$gccFolder/riscv32-unknown-elf" --with-arch=rv32gcv --with-abi=ilp32
 #make

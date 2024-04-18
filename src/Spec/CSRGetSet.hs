@@ -208,6 +208,9 @@ getCSR SATP = do
     else do
     return (shift mode 60 .|. shift asid 44 .|. ppn)
 
+
+getCSR VStart = getCSRField Field.VStart
+
 -- User-level CSRs:
 
 getCSR FFlags = getCSRField Field.FFlags
@@ -248,7 +251,19 @@ getCSR FCSR = do
   frm <- getCSRField Field.FRM
   return (shift frm 5 .|. fflags)
 
+getCSR VLenB = getCSRField Field.VLenB
 
+getCSR VL = getCSRField Field.VL
+
+getCSR VType = do
+  vill <- getCSRField Field.VIll
+  vma <- getCSRField Field.VMA
+  vta <- getCSRField Field.VTA
+  vsew <- getCSRField Field.VSEW
+  vlmul <- getCSRField Field.VLMul
+  xlen <- getXLEN
+  return (vlmul .|. shift vsew 3 .|. shift vta 6 .|. shift vma 7 .|.
+          shift vill (xlen - 1))
 getCSR _ = return (-1) -- Hmmm, why did I hardwire that to -1?
 
 setCSR :: (RiscvMachine p t) => CSR -> MachineInt -> p ()
@@ -421,5 +436,25 @@ setCSR FRM val = setCSRField Field.FRM (bitSlice val 0 3)
 setCSR FCSR val = do
   setCSRField Field.FFlags (bitSlice val 0 5)
   setCSRField Field.FRM (bitSlice val 5 8)
+
+setCSR VLenB val = setCSRField Field.VLenB val 
+-- Should be a constant on initialization, unsure how to do that yet
+
+setCSR VL val = setCSRField Field.VL val
+
+setCSR VStart val = setCSRField Field.VStart val
+
+setCSR VType val = do
+   xlen <- getXLEN
+   let vlmul = bitSlice val 0 3
+   let vsew = bitSlice val 3 6
+   let vta = bitSlice val 6 7
+   let vma = bitSlice val 7 8
+   let vill = bitSlice val (xlen - 1) xlen
+   setCSRField Field.VLMul vlmul
+   setCSRField Field.VSEW vsew
+   setCSRField Field.VTA vta
+   setCSRField Field.VMA vma
+   setCSRField Field.VIll vill 
 
 setCSR _ _ = return () -- raiseException 0 2

@@ -19,7 +19,9 @@ data CSR = MHartID | MISA | MStatus | MTVec | MEDeleg | MIDeleg | MIP | MIE | MC
      -- User-mode CSRs
            UStatus | UIE | UTVec | UScratch | UEPC | UCause | UTVal | UIP |
            FFlags | FRM | FCSR | Time | Cycle | InstRet |
+	   VStart | VL | VType | VLenB | 
            InvalidCSR
+	   
   deriving Eq
 
 -- For Clash's sake; otherwise, this could be an enum.
@@ -95,4 +97,8 @@ lookupCSR x
   | x == 0xC01 = Time
   | x == 0xC02 = InstRet
   | x == 0xF14 = MHartID
+  | x == 0x008 = VStart
+  | x == 0xC20 = VL
+  | x == 0xC21 = VType
+  | x == 0xC22 = VLenB
   | otherwise = InvalidCSR
