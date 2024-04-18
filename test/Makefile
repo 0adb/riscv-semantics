@@ -21,7 +21,8 @@ HEX64V=$(addsuffix .hex, $(ELF64V))
 
 RISCVCC64=riscv-none-embed-gcc -march=rv64im -mabi=lp64 -static -nostdlib -nostartfiles -mcmodel=medany
 RISCVCC32=riscv-none-embed-gcc -march=rv32im -mabi=ilp32 -static -nostdlib -nostartfiles -mcmodel=medany
-RISCVCC64V=riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64 -static -nostdlib -nostartfiles -mcmodel=medany
+RISCVCC64V=riscv64-unknown-elf-gcc -march=rv64imv -mabi=lp64 -static -nostdlib -nostartfiles -mcmodel=medany
+OBJDUMP64V=riscv64-unknown-elf-objdump -drCS --disassembler-options=att
 
 all: $(HEX32) $(HEX64) $(HEX64V)
 all64: $(HEX64) 
@@ -79,7 +80,8 @@ $(BUILDDIR)/%64.hex: $(ELF2HEX)/elf2hex $(SRCDIR)/%.c init64.o mmio64.o mmio.ld
 
 $(BUILDDIR)/%64v.hex: $(ELF2HEX)/elf2hex $(SRCDIR)/vector/%.c init64v.o mmio64v.o mmio.ld
 	mkdir -p $(BUILDDIR)
-	$(RISCVCC64V) -c $(SRCDIR)/vector/$*.c -o intermediate64v.o
+	$(RISCVCC64V) -g -c $(SRCDIR)/vector/$*.c -o intermediate64v.o
+	$(OBJDUMP64V) intermediate64v.o > $(BUILDDIR)/$*64v_objdump.txt
 	$(RISCVCC64V) -o $(BUILDDIR)/$*64v -Tmmio.ld intermediate64v.o init64v.o mmio64v.o
 	$(ELF2HEX)/elf2hex $(BUILDDIR)/$*64v 0 16G $(BUILDDIR)/$*64v.hex
 	rm intermediate64v.o
