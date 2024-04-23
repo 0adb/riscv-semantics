@@ -233,7 +233,8 @@ data Instruction =
 -- TODO: Switch to a representation that doesn't involve enumerating all the
 -- combinatoric possibilities; possibily the one used by the MISA CSR.
 data InstructionSet = RV32I | RV32IM | RV32IA | RV32IMA | RV32IF | RV32IMF | RV32IAF | RV32IMAF |
-                      RV64I | RV64IM | RV64IA | RV64IMA | RV64IF | RV64IMF | RV64IAF | RV64IMAF | RVV 
+                      RV64I | RV64IM | RV64IA | RV64IMA | RV64IF | RV64IMF | RV64IAF | RV64IMAF | 
+                      RV64IMV 
   deriving (Eq, Show)
 
 bitwidth :: InstructionSet -> Int
@@ -253,7 +254,7 @@ bitwidth RV64IF = 64
 bitwidth RV64IMF = 64
 bitwidth RV64IAF = 64
 bitwidth RV64IMAF = 64
-bitwidth RVV = 64
+bitwidth RV64IMV = 64
 
 supportsM :: InstructionSet -> Bool
 supportsM RV32IM = True
@@ -264,7 +265,7 @@ supportsM RV64IM = True
 supportsM RV64IMA = True
 supportsM RV64IMF = True
 supportsM RV64IMAF = True
-supportsM RVV = True
+supportsM RV64IMV = True
 supportsM _ = False
 
 supportsA :: InstructionSet -> Bool
@@ -290,7 +291,7 @@ supportsF RV64IMAF = True
 supportsF _ = False
 
 supportsV :: InstructionSet ->  Bool
-supportsV RVV = True
+supportsV RV64IMV = True
 supportsV _ = False
 
 -- ================================================================
@@ -332,7 +333,7 @@ opcode_JALR      :: Opcode;    opcode_JALR      = 0b1100111
 opcode_JAL       :: Opcode;    opcode_JAL       = 0b1101111
 opcode_SYSTEM    :: Opcode;    opcode_SYSTEM    = 0b1110011
 
-opcode_OP_V      :: Opcode;    opcode_V         = 0b1010111
+opcode_OP_V      :: Opcode;    opcode_OP_V         = 0b1010111
 
 -- LOAD sub-opcodes
 funct3_LB  :: MachineInt;    funct3_LB  = 0b000
@@ -599,7 +600,7 @@ decode iset inst =
       (if bitwidth iset == 64 && supportsM iset then resultM64 else []) ++
       (if bitwidth iset == 64 && supportsA iset then resultA64 else []) ++
       (if bitwidth iset == 64 && supportsF iset then resultF64 else []) ++
-      (if bitwidth iset == 64 && supportsV iset then resultV else [])
+      (if bitwidth iset == 64 && supportsV iset then resultV else []) ++
       resultCSR
 
     resultI = if isValidI decodeI then [IInstruction decodeI] else []
@@ -851,10 +852,10 @@ decode iset inst =
       | True = InvalidCSR
 
     decodeV
-      | opcode==opcode_V, funct3==funct3_VSETVLI, (bitSlice inst 31 32)==0b0 = Vsetvli rd rs1 zimm11
-      | opcode==opcode_LOAD_FP, mop=0b00, lumop=0b00000 = Vle width vd rs1 vm
-      | opcode==opcode_LOAD_FP, mop=0b00, lumop=0b01000 = Vlr vd rs1 nf
-      | opcode==opcode_STORE_FP, mop=0b00, sumop=0b00000 = Vse width vs3 rs1 vm
-      | opcode==opcode_STORE_FP, mop=0b00, lumop=0b01000 = Vlr vd rs1 nf
+      | opcode==opcode_OP_V, funct3==funct3_VSETVLI, (bitSlice inst 31 32)==0b0 = Vsetvli rd rs1 zimm11
+      | opcode==opcode_LOAD_FP, mop==0b00, lumop==0b00000 = Vle width vd rs1 vm
+      | opcode==opcode_LOAD_FP, mop==0b00, lumop==0b01000 = Vlr vd rs1 nf
+      | opcode==opcode_STORE_FP, mop==0b00, sumop==0b00000 = Vse width vs3 rs1 vm
+      | opcode==opcode_STORE_FP, mop==0b00, lumop==0b01000 = Vlr vd rs1 nf
       | True = InvalidV
 -- ================================================================
