@@ -44,8 +44,8 @@ class (Monad p, MachineWidth t) => RiscvMachine p t | p -> t where
   -- TODO: Another typeclass parameter for floating-point width?
   getFPRegister :: FPRegister -> p Int32
   setFPRegister :: FPRegister -> Int32 -> p ()
-  getVRegister :: VRegister -> p [[Int8]]
-  setVRegister :: VRegister -> [[Int8]] -> p ()
+  getVRegister :: VRegister -> p [Int8]
+  setVRegister :: VRegister -> [Int8] -> p ()
   loadByte :: SourceType -> t -> p Int8
   loadHalf :: SourceType -> t -> p Int16
   loadWord :: SourceType -> t -> p Int32
