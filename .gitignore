@@ -14,3 +14,4 @@ src/verilog/
 /riscv-memory-model/alloy4.2_2015-02-22.jar
 /test/litmus/*.log
 /execution*.als
+riscv-gnu-toolchain
