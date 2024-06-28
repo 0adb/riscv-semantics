@@ -673,7 +673,7 @@ decode iset inst =
     vs2     = rs2                    -- V extension, address offsets
     sumop   = rs2                    -- V extension, unit-stride store variant
     lumop   = rs2                    -- V extension, unit-stride load variant
-    vm      = bitSlice inst 25 26    -- V extension, mask enabled
+    vm      = bitSlice inst 25 26    -- V extension, 1 = mask disabled, 0 = mask enabled
     mop     = bitSlice inst 26 28    -- V extension, memory addressing mode
     mew     = bitSlice inst 28 29    -- V extension, memory element width
     nf      = bitSlice inst 29 32    -- V extension, number of fields

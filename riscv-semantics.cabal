@@ -314,6 +314,7 @@ executable riscv-semantics-v
       Spec.ExecuteI64
       Spec.ExecuteM
       Spec.ExecuteM64
+      Spec.ExecuteV
       Spec.Machine
       Spec.Memory
       Spec.Spec
