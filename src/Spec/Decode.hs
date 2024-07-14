@@ -194,9 +194,10 @@ data InstructionV =
         nf :: MachineInt } | 
   Vsr { vs3 :: VRegister, rs1 :: Register,
         nf :: MachineInt } |
-  Vsetvli { rd :: Register, rs1 :: Register, vtypei :: MachineInt } |	
+  Vsetvli { rd :: Register, rs1 :: Register, vtypei :: MachineInt } |
   Vsetivli { rd :: Register, uimm :: MachineInt, vtypei :: MachineInt } |	
-  Vsetvl { rd :: Register, rs1 :: Register, rs2 :: Register } |	
+  Vsetvl { rd :: Register, rs1 :: Register, rs2 :: Register } |
+  Vaddvv { vd :: VRegister, vs1 :: VRegister, vs2 :: VRegister, vm :: MachineInt } |
   InvalidV deriving (Eq, Read, Show)
 
 data InstructionCSR =
@@ -857,12 +858,11 @@ decode iset inst =
     decodeV
       | opcode==opcode_OP_V, funct3==funct3_VSETVLI, (bitSlice inst 31 32)==0b0 = Vsetvli rd rs1 zimm11
       | opcode==opcode_OP_V, funct3==funct3_VSETVLI, (bitSlice inst 30 32)==0b11 = Vsetivli rd rs1 zimm10
-      -- Note: unclear if I should rename rs1 in Vsetivli to uimm. It's the right bitslice
-      -- but semantically means something else.
       | opcode==opcode_OP_V, funct3==funct3_VSETVLI, (bitSlice inst 31 32)==0b1, (bitSlice inst 25 31)==0b000000 = Vsetvl rd rs1 rs2
       | opcode==opcode_LOAD_FP, mop==0b00, lumop==0b00000 = Vle width vd rs1 vm
       | opcode==opcode_LOAD_FP, mop==0b00, lumop==0b01000 = Vlr vd rs1 nf
       | opcode==opcode_STORE_FP, mop==0b00, sumop==0b00000 = Vse width vs3 rs1 vm
       | opcode==opcode_STORE_FP, mop==0b00, lumop==0b01000 = Vsr vd rs1 nf
+      | opcode==opcode_OP_V, width==0b000, funct6==0b000000 = Vaddvv vd rs1 vs2 vm
       | True = InvalidV
 -- ================================================================

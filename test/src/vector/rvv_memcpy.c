@@ -15,22 +15,40 @@ void* memcpy_vec(void *dst, void *src, size_t n) {
 }
 
 int main() {
-  char *s = "begin c\n";
+  char *s = "1234";
   char *p;
-  for (p = s; p < s + 8; p++) putchar(*p);
+  for (p = s; p < s + 4; p++) putchar(*p);
+  
+  putchar('\n');
     
-  const int N = 256;
+  const int N = 128;
   int golden[N];
   for (int i = 0; i < N; i++) { golden[i] = s[i % 4]; }
   for (int i = 0; i < N; i++) { putchar(golden[i]); }
 
   putchar('\n');
-  // UP TO HERE, no vector instructions used ^^
+  
   int actual[N];
+  
   memcpy_vec(actual, golden, sizeof(golden));
   for (int i = 0; i < N; i++) {
     putchar(actual[i]);
   }
   putchar('\n');
+
+  const int N1 = 97;
+  char golden1[N1];
+  for (int i = 0; i < N1; i++) { golden1[i] = s[i % 4]; }
+  for (int i = 0; i < N1; i++) { putchar(golden1[i]); }
+
+  putchar('\n');
+  char actual1[N1];
+  memcpy_vec(actual1, golden1, sizeof(golden1));
+  for (int i = 0; i < N; i++) {
+    putchar(actual1[i]);
+  }
+
+  putchar('\n');
+  
   
 }

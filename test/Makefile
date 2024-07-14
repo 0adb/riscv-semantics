@@ -22,7 +22,7 @@ HEX64V=$(addsuffix .hex, $(ELF64V))
 RISCVCC64=riscv-none-embed-gcc -march=rv64im -mabi=lp64 -static -nostdlib -nostartfiles -mcmodel=medany
 RISCVCC32=riscv-none-embed-gcc -march=rv32im -mabi=ilp32 -static -nostdlib -nostartfiles -mcmodel=medany
 RISCVCC64V=riscv64-unknown-elf-gcc -march=rv64imv -mabi=lp64 -static -nostdlib -nostartfiles -mcmodel=medany
-OBJDUMP64V=riscv64-unknown-elf-objdump -drCS --disassembler-options=att
+OBJDUMP64V=riscv64-unknown-elf-objdump -drCS 
 
 all: $(HEX32) $(HEX64) $(HEX64V)
 all64: $(HEX64) 

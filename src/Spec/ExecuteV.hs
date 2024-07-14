@@ -35,6 +35,16 @@ maybeIndex_machineInt l idx = if (length_machineInt l > idx) then (Just (l !! (f
 testBit_machineInt :: forall a. Bits a => a -> MachineInt -> Bool
 testBit_machineInt b idx = testBit b (fromIntegral idx)
 
+int8_toWord8 :: Int8 -> Word8
+int8_toWord8 n = (fromIntegral:: Int8 -> Word8) n
+
+word8_toInt8 :: Word8 -> Int8
+word8_toInt8 n = (fromIntegral:: Word8 -> Int8) n
+
+
+splitBytes_machineInt :: forall a. (Bits a, Integral a) => MachineInt -> a -> [Word8]
+splitBytes_machineInt n w = splitBytes (fromIntegral n) w
+
 translateSEW :: forall t. (MachineWidth t) => t -> Maybe MachineInt
 translateSEW 0b000 = Just 3
 translateSEW 0b001 = Just 4
@@ -80,7 +90,7 @@ legalSEW vsew vlmul vlenb =
     fromMaybe False $ do
         pow2SEW <- translateSEW vsew
         pow2LMUL <- translateLMUL vlmul
-        return (2 ^ pow2SEW <= ((2 ^ pow2LMUL) * vlenb * 8))
+        trace ("pow2SEW " ++ show pow2SEW ++ " pow2LMUL "  ++ show pow2LMUL)$ (return (2 ^ pow2SEW <= ((2 ^ pow2LMUL) * vlenb * 8)))
 
 consistentRatio :: forall t. (MachineWidth t) => t -> t-> t -> t -> Bool
 consistentRatio vlmul vsew vlmul' vsew' =
@@ -99,7 +109,7 @@ computeVLMAX vlmul vsew vlenb =
     fromMaybe 0 $ do
         pow2SEW <- translateSEW vsew
         pow2LMUL <- translateLMUL vlmul
-        return (8 * ( vlenb) * (2 ^ (pow2LMUL - pow2SEW)))
+        return (( vlenb) * (2 ^ (3 + pow2LMUL - pow2SEW)))
 
 computeMaxTail :: forall t. (MachineWidth t) => t -> t -> t -> t
 computeMaxTail vlmul vlenb vsew =
@@ -117,10 +127,11 @@ executeVset noRatioCheck avl vtypei rd = do
     vlmul_old <- getCSRField Field.VLMul
     vsew_old <- getCSRField Field.VSEW
     vlenb <- getCSRField Field.VLenB
-    setCSRField Field.VLMul vlmul
+    trace ("no Ratio Check " ++ show noRatioCheck) $ setCSRField Field.VLMul vlmul
     setCSRField Field.VSEW vsew
     setCSRField Field.VMA vma
     setCSRField Field.VTA vta
+    
     let vill = (if (legalSEW vsew vlmul (fromImm vlenb) && 
                     (noRatioCheck
                      || (consistentRatio (fromImm vlmul_old) (fromImm vsew_old) vlmul vsew))
@@ -266,6 +277,51 @@ execute (Vle width vd rs1 vm) =
                     in  (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8))))))
         setCSRField Field.VStart 0b0
                   
+
+--   Vaddvv { vd :: VRegister, vs1 :: VRegister, vs2 :: VRegister, vm :: MachineInt } |
+execute (Vaddvv vd vs1 vs2 vm) =
+  do
+    vstart <- getCSRField Field.VStart
+    vlmul <- getCSRField Field.VLMul 
+    vlenb <- getCSRField Field.VLenB
+    vl <- getCSRField Field.VL
+    vma <- getCSRField Field.VMA
+    vta <- getCSRField Field.VTA
+    vsew <- getCSRField Field.VSEW
+    vmask <- getVRegister 0
+
+    let eew = fromMaybe 8 (translateWidth vsew) 
+        maxTail = computeMaxTail vlmul vlenb ( eew) 
+        eltsPerVReg = (vlenb * 8) `div` ( eew)
+      in
+      do
+        forM_ [vstart..(vl-1)]
+          (\i ->
+             do
+               let
+                 realVd = vd + ( (i `div` eltsPerVReg))
+                 realVs1 = vs1 + ( (i `div` eltsPerVReg))
+                 realVs2 = vs2 + ( (i `div` eltsPerVReg))
+                 realEltIdx = (i `mod` eltsPerVReg)
+               vs1value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs1)) (fromImm ( realEltIdx))
+               vs2value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs2)) (fromImm ( realEltIdx))
+               let
+                 vs1Element = (combineBytes :: [Word8] -> Int) (map (int8_toWord8) (reverse vs1value))
+                 vs2Element = (combineBytes :: [Word8] -> Int) (map (int8_toWord8) (reverse vs2value))
+                 vdElement = vs1Element + vs2Element
+               when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) (map (word8_toInt8) (splitBytes_machineInt (eew `div` 8) vdElement)))
+               when (vm == 0b0 && (not (testVectorBit vmask i) && (vma == 0b1))) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8))))
+               setCSRField Field.VStart i
+          )
+        when (vta == 0b1) (forM_ [vl..(maxTail-1)]
+                           (\i ->
+                              let realVd = vd + ( (i `div` eltsPerVReg))
+                                  realEltIdx = (i `mod` eltsPerVReg)
+                              in do
+                                setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8)))))
+        setCSRField Field.VStart 0b0
+
+
                                 
 execute (Vse width vd rs1 vm) =
   
@@ -321,3 +377,4 @@ execute (Vsr vs3 rs1 nf) =
            value <- getVRegister (vs3 + ( i))
            (trace ("getting vreg " ++ (show (vs3 + i)) ++ " with values " ++ (show value))) $ storeUntranslatedBytes (baseMem + fromImm (vlenb * ( i))) value
            ))
+
