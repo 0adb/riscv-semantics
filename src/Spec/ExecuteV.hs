@@ -43,14 +43,8 @@ word8_toInt8 n = (fromIntegral:: Word8 -> Int8) n
 
 
 splitBytes_machineInt :: forall a. (Bits a, Integral a) => MachineInt -> a -> [Word8]
-splitBytes_machineInt n w = splitBytes (fromIntegral n) w
+splitBytes_machineInt n w = ((trace ("n: " ++ show (fromIntegral n))) $ (splitBytes (fromIntegral n) w))
 
-translateSEW :: forall t. (MachineWidth t) => t -> Maybe MachineInt
-translateSEW 0b000 = Just 3
-translateSEW 0b001 = Just 4
-translateSEW 0b010 = Just 5
-translateSEW 0b011 = Just 6
-translateSEW _ = Nothing
 
 translateLMUL :: forall t. (MachineWidth t) => t -> Maybe MachineInt
 translateLMUL 0b101 = Just (-3)
@@ -64,12 +58,19 @@ translateLMUL _ = Nothing
 
 
 
-translateWidth :: forall t. (MachineWidth t) => t -> Maybe MachineInt
-translateWidth 0b000 = Just 8
-translateWidth 0b101 = Just 16
-translateWidth 0b110 = Just 32
-translateWidth 0b111 = Just 64
-translateWidth _ = Nothing
+translateWidth_Vtype :: forall t. (MachineWidth t) => t -> Maybe MachineInt
+translateWidth_Vtype 0b000 = Just 3
+translateWidth_Vtype 0b001 = Just 4
+translateWidth_Vtype 0b010 = Just 5
+translateWidth_Vtype 0b011 = Just 6
+translateWidth_Vtype _ = Nothing
+
+translateWidth_Inst :: forall t. (MachineWidth t) => t -> Maybe MachineInt
+translateWidth_Inst 0b000 = Just 3
+translateWidth_Inst 0b101 = Just 4
+translateWidth_Inst 0b110 = Just 5
+translateWidth_Inst 0b111 = Just 6
+translateWidth_Inst _ = Nothing
 
 translateNumFields :: MachineInt -> Maybe MachineInt
 translateNumFields 0b000 = Just 1
@@ -88,16 +89,16 @@ legalSEW :: forall t. (MachineWidth t) => t -> t -> t -> Bool
 -- which in this case is (2 raised to (pow2SEW) <= 2 raised to (pow2LMUL) times vlenb times 8)
 legalSEW vsew vlmul vlenb =
     fromMaybe False $ do
-        pow2SEW <- translateSEW vsew
+        pow2SEW <- translateWidth_Vtype vsew
         pow2LMUL <- translateLMUL vlmul
         trace ("pow2SEW " ++ show pow2SEW ++ " pow2LMUL "  ++ show pow2LMUL)$ (return (2 ^ pow2SEW <= ((2 ^ pow2LMUL) * vlenb * 8)))
 
 consistentRatio :: forall t. (MachineWidth t) => t -> t-> t -> t -> Bool
 consistentRatio vlmul vsew vlmul' vsew' =
     fromMaybe False $ do
-        pow2SEW <- translateSEW vsew
+        pow2SEW <- translateWidth_Vtype vsew
         pow2LMUL <- translateLMUL vlmul
-        pow2SEW' <- translateSEW vsew'
+        pow2SEW' <- translateWidth_Vtype vsew'
         pow2LMUL' <- translateLMUL vlmul'
         return (pow2SEW - pow2LMUL == pow2SEW' - pow2LMUL')
 
@@ -106,15 +107,19 @@ consistentRatio vlmul vsew vlmul' vsew' =
 -- Not implementing here the restriction that LMUL < SEW_min/ELEN is undefined behavior. 
 computeVLMAX ::  forall t. (MachineWidth t) => t -> t -> t -> t
 computeVLMAX vlmul vsew vlenb =
-    fromMaybe 0 $ do
-        pow2SEW <- translateSEW vsew
+  fromMaybe 0 $ do
+        pow2SEW <- translateWidth_Vtype vsew
         pow2LMUL <- translateLMUL vlmul
-        return (( vlenb) * (2 ^ (3 + pow2LMUL - pow2SEW)))
+        (let exp = 3 + pow2LMUL - pow2SEW in
+            if exp >= 0 then
+              return (vlenb * (2 ^ (exp)))
+            else
+              return (vlenb `div` (2 ^ (-exp))))
 
 computeMaxTail :: forall t. (MachineWidth t) => t -> t -> t -> t
 computeMaxTail vlmul vlenb vsew =
     fromMaybe 0 $ do
-        pow2SEW <- translateSEW vsew
+        pow2SEW <- translateWidth_Vtype vsew
         pow2LMUL <- translateLMUL vlmul
         let tail =
               8 * ( vlenb) * (2 ^ ((if pow2LMUL < 0 then 0 else pow2LMUL) - pow2SEW)) in if tail >= 1
@@ -139,7 +144,7 @@ executeVset noRatioCheck avl vtypei rd = do
         vlmax = computeVLMAX vlmul vsew (fromImm vlenb) 
         vl =  (if ( avl) <= vlmax then ( avl) else vlmax) in
         do
-          setCSRField Field.VL vl 
+          trace ("vl set, avl and vlmax are " ++ show (fromIntegral vl) ++ " " ++ show (fromIntegral avl) ++ " " ++ show (fromIntegral vlmax)) $ setCSRField Field.VL vl 
           setCSRField Field.VStart 0b0
           setCSRField Field.VIll vill
           unless (rd == 0b0) (setRegister rd vl)
@@ -170,6 +175,7 @@ getVRegisterElement eew baseReg eltIndex =
   
 setVRegisterElement :: forall p t. (RiscvMachine p t) => MachineInt -> VRegister -> MachineInt -> [Int8] -> p ()
 setVRegisterElement eew baseReg eltIndex value =
+  ((trace ("eew, baseReg, eltIndex, value: " ++ show eew ++ " " ++ show baseReg ++ " " ++ show eltIndex ++ " " ++ show value)) $ (
   if (and [(eew /= 1), (eew /= 2), (eew /= 4), (eew /= 8)])
   then
     raiseException 0 2 -- isInterrupt and exceptionCode arbitrary
@@ -183,13 +189,13 @@ setVRegisterElement eew baseReg eltIndex value =
             (drop_machineInt ( ((eltIndex + 1) * eew)) vregValue) in
         if (length newVregValue) == (length vregValue)
         then (trace ("value stored to vregister: " ++ show newVregValue ++ " at register idx " ++ show baseReg)) $ (setVRegister baseReg newVregValue)
-        else raiseException 0 2
+        else raiseException 0 2))
 
 loadUntranslatedBytes :: forall p t. (RiscvMachine p t) => t -> MachineInt -> p [Int8]
-loadUntranslatedBytes memAddr numBytes = forM (zeroToExclusive_machineInt numBytes) (\i ->
+loadUntranslatedBytes memAddr numBytes = (trace ("memAddr, numBytes " ++ show (fromIntegral memAddr) ++ " " ++ show (fromIntegral numBytes)) ) $ (forM (zeroToExclusive_machineInt numBytes) (\i ->
                                                                  do
                                                                    addr <- (translate Load 1 (memAddr + (fromImm i)))
-                                                                   trace ("loading from address" ++ show (fromIntegral addr)) $ loadByte Execute addr)
+                                                                   trace ("loading from address" ++ show (fromIntegral addr)) $ loadByte Execute addr))
                                          
 storeUntranslatedBytes :: forall p t. (RiscvMachine p t) => t -> [Int8] -> p ()
 storeUntranslatedBytes memAddr value = forM_ (zeroToExclusive_machineInt (length_machineInt value)) (\i ->
@@ -250,24 +256,25 @@ execute (Vle width vd rs1 vm) =
     vma <- getCSRField Field.VMA
     vta <- getCSRField Field.VTA
     vmask <- getVRegister 0
-    let eew = fromMaybe 8 (translateWidth width) 
-        maxTail = computeMaxTail vlmul vlenb ( eew) 
-        eltsPerVReg = (vlenb * 8) `div` ( eew)
+    let eew = 2 ^ (fromMaybe 8 (translateWidth_Inst width))
+        maxTail = computeMaxTail vlmul vlenb (eew) 
+        eltsPerVReg = (vlenb * 8) `div` (eew)
       in
       do
-        forM_ [vstart..(vl-1)]
+        (trace ("vstart " ++ show (fromIntegral vstart) ++ " vl " ++ show (fromIntegral vl))) $ (forM_ [vstart..(vl-1)]
           (\i ->
             let realVd = vd + ( (i `div` eltsPerVReg))
                 realEltIdx = (i `mod` eltsPerVReg)
             in
-              do
+              (trace ("real vd, real elt idx " ++ show realVd ++ " " ++ show realEltIdx))
+              $ (do
              
                  baseMem <- getRegister rs1
                  mem <- loadUntranslatedBytes (baseMem + (fromImm (i * (eew `div` 8))))  (eew `div` 8)
-                 when (vm == 0b1 || (testVectorBit vmask ( i))) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) mem) 
+                 when (vm == 0b1 || (testVectorBit vmask ( i)))  ((trace "got to this spot") $ (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) mem))
                  when (vm == 0b0 && (not (testVectorBit vmask ( i))) && (vma == 0b1)) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8)) ))
-                 setCSRField Field.VStart i
-          )
+                 ((trace ("mem loaded " ++ show mem)) $ (setCSRField Field.VStart i)))
+          ))
         when (vta == 0b1)
             (forM_ [vl..( (maxTail-1))]
                   (\i ->
@@ -290,9 +297,9 @@ execute (Vaddvv vd vs1 vs2 vm) =
     vsew <- getCSRField Field.VSEW
     vmask <- getVRegister 0
 
-    let eew = fromMaybe 8 (translateWidth vsew) 
-        maxTail = computeMaxTail vlmul vlenb ( eew) 
-        eltsPerVReg = (vlenb * 8) `div` ( eew)
+    let eew = 2 ^ (fromMaybe 0 (translateWidth_Vtype vsew)) 
+        maxTail = computeMaxTail vlmul vlenb (eew) 
+        eltsPerVReg = (vlenb * 8) `div` (eew)
       in
       do
         forM_ [vstart..(vl-1)]
@@ -306,10 +313,11 @@ execute (Vaddvv vd vs1 vs2 vm) =
                vs1value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs1)) (fromImm ( realEltIdx))
                vs2value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs2)) (fromImm ( realEltIdx))
                let
-                 vs1Element = (combineBytes :: [Word8] -> Int) (map (int8_toWord8) (reverse vs1value))
-                 vs2Element = (combineBytes :: [Word8] -> Int) (map (int8_toWord8) (reverse vs2value))
+                 vs1Element = (combineBytes :: [Word8] -> Int) (map (int8_toWord8) (vs1value))
+                 vs2Element = (combineBytes :: [Word8] -> Int) (map (int8_toWord8) (vs2value))
                  vdElement = vs1Element + vs2Element
-               when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) (map (word8_toInt8) (splitBytes_machineInt (eew `div` 8) vdElement)))
+               (trace ("vs1, vs2, vd vaddvv values" ++ show vs1Element ++ " " ++ show vs2Element ++ " " ++ show vdElement) $ (setCSRField Field.VStart i))
+               when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) (map (word8_toInt8) (splitBytes_machineInt (eew) vdElement)))
                when (vm == 0b0 && (not (testVectorBit vmask i) && (vma == 0b1))) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8))))
                setCSRField Field.VStart i
           )
@@ -333,9 +341,9 @@ execute (Vse width vd rs1 vm) =
     vma <- getCSRField Field.VMA
     vta <- getCSRField Field.VTA
     vmask <- getVRegister 0
-    let eew = fromMaybe 8 (translateWidth width) 
-        maxTail = computeMaxTail vlmul vlenb ( eew) 
-        eltsPerVReg = (vlenb * 8) `div` ( eew)
+    let eew = 2 ^ (fromMaybe 8 (translateWidth_Inst width)) 
+        maxTail = computeMaxTail vlmul vlenb (eew) 
+        eltsPerVReg = (vlenb * 8) `div` (eew)
       in
       do
         forM_ [vstart..(vl-1)]
