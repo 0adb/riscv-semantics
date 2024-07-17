@@ -42,11 +42,11 @@ word8_toInt8 :: Word8 -> Int8
 word8_toInt8 n = (fromIntegral:: Word8 -> Int8) n
 
 
-combineBytes_Int8 :: [Int8] ->  MachineInt
-combineBytes_Int8 bytes = foldr (\(x,n) res -> res .|. shiftL (fromIntegral n) (8*x)) 0 $ zip [0..] bytes
+combineBytes_t ::  forall t. (MachineWidth t) => [Int8] -> t
+combineBytes_t bytes = foldr (\(x,n) res -> res .|. (sll n (8*x))) 0 $ zip [0..] (map int8ToReg bytes)
 
-splitBytes_Int8 :: MachineInt -> MachineInt -> [Int8]
-splitBytes_Int8 n w = map (fromIntegral)  [bitSlice w p (p + 8) | p <- (map (fromIntegral) [0,8..n-1])]
+splitBytes_t :: forall v t. (MachineWidth t, Integral v) => v -> t -> [Int8]
+splitBytes_t n w = map (fromIntegral)  [(remu (srl w p) (fromImm 256)) | p <- (map (fromIntegral) [0,8..n-1])]
 
 
 translateLMUL :: forall t. (MachineWidth t) => t -> Maybe MachineInt
@@ -316,11 +316,11 @@ execute (Vaddvv vd vs1 vs2 vm) =
                vs1value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs1)) (fromImm ( realEltIdx))
                vs2value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs2)) (fromImm ( realEltIdx))
                let
-                 vs1Element = (combineBytes_Int8 vs1value)
-                 vs2Element = (combineBytes_Int8 vs2value)
-                 vdElement = vs1Element + vs2Element
-               (trace ("vs1, vs2, vd vaddvv values" ++ show vs1Element ++ " " ++ show vs2Element ++ " " ++ show vdElement) $ (setCSRField Field.VStart i))
-               when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) ( (splitBytes_Int8 (eew) vdElement)))
+                 vs1Element :: t = (combineBytes_t vs1value)
+                 vs2Element :: t = (combineBytes_t vs2value)
+                 vdElement :: t = vs1Element + vs2Element
+               (trace ("vs1, vs2, vd vaddvv values" ++ show (fromIntegral vs1Element) ++ " " ++ show (fromIntegral vs2Element) ++ " " ++ show (fromIntegral vdElement)) $ (setCSRField Field.VStart i))
+               when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) ( (splitBytes_t (eew) vdElement)))
                when (vm == 0b0 && (not (testVectorBit vmask i) && (vma == 0b1))) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8))))
                setCSRField Field.VStart i
           )
