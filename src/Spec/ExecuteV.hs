@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, BinaryLiterals #-}
+{-# LANGUAGE ScopedTypeVariables, BinaryLiterals, AllowAmbiguousTypes #-}
 module Spec.ExecuteV where
 import Spec.Decode
 import Spec.Machine
@@ -35,15 +35,15 @@ maybeIndex_machineInt l idx = if (length_machineInt l > idx) then (Just (l !! (f
 testBit_machineInt :: forall a. Bits a => a -> MachineInt -> Bool
 testBit_machineInt b idx = testBit b (fromIntegral idx)
 
-int8_toWord8 :: Int8 -> Word8
-int8_toWord8 n = (fromIntegral:: Int8 -> Word8) n
-
-word8_toInt8 :: Word8 -> Int8
-word8_toInt8 n = (fromIntegral:: Word8 -> Int8) n
 
 
-splitBytes_machineInt :: forall a. (Bits a, Integral a) => MachineInt -> a -> [Word8]
-splitBytes_machineInt n w = ((trace ("n: " ++ show (fromIntegral n))) $ (splitBytes (fromIntegral n) w))
+combineBytes_machineInt :: forall t. (MachineWidth t) => [Int8] -> t
+combineBytes_machineInt bytes = (fromImm (foldr (\(x,n) res -> res .|. shiftL (n) (8*x)) 0 $ zip [0..] (map (regToInt64 . int8ToReg) bytes)))
+
+splitBytes_machineInt :: forall t a. (MachineWidth t, Integral a) => a -> t -> [Int8]
+splitBytes_machineInt n w =  ([ regToInt8 (remu (sll w (fromIntegral p)) (fromImm 255)) | p <- [0,8..n-1]])
+                                    
+
 
 
 translateLMUL :: forall t. (MachineWidth t) => t -> Maybe MachineInt
@@ -312,12 +312,12 @@ execute (Vaddvv vd vs1 vs2 vm) =
                  realEltIdx = (i `mod` eltsPerVReg)
                vs1value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs1)) (fromImm ( realEltIdx))
                vs2value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs2)) (fromImm ( realEltIdx))
-               let
-                 vs1Element = (combineBytes :: [Word8] -> Int) (map (int8_toWord8) (vs1value))
-                 vs2Element = (combineBytes :: [Word8] -> Int) (map (int8_toWord8) (vs2value))
-                 vdElement = vs1Element + vs2Element
-               (trace ("vs1, vs2, vd vaddvv values" ++ show vs1Element ++ " " ++ show vs2Element ++ " " ++ show vdElement) $ (setCSRField Field.VStart i))
-               when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) (map (word8_toInt8) (splitBytes_machineInt (eew) vdElement)))
+               let 
+                 vs1Element = (combineBytes_machineInt (vs1value))
+                 vs2Element = (combineBytes_machineInt (vs2value))
+                 vdElement = splitBytes_machineInt eew ((regToInt64 vs1Element) + (regToInt64 vs2Element))
+               setCSRField Field.VStart i
+               when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) (vdElement))
                when (vm == 0b0 && (not (testVectorBit vmask i) && (vma == 0b1))) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8))))
                setCSRField Field.VStart i
           )
