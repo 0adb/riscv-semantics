@@ -21,7 +21,7 @@ int main() {
   int golden[N];
   for (int i = 0; i < N; i++) { golden[i] = s[i % 4]; }
   
-  for (int i = 0; i < N; i++) { putchar(golden[i]); }
+  for (int i = 0; i < N; i++) { putchar(golden[i]); putchar(','); }
   
   putchar('\n');
   
@@ -30,7 +30,7 @@ int main() {
   memcpy_vec(actual, golden, sizeof(golden));
   
   for (int i = 0; i < N; i++) {
-    putchar(actual[i]);
+    putchar(actual[i]); putchar(',');
   }
   
   putchar('\n');

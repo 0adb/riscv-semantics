@@ -220,7 +220,7 @@ execute (Vsetvli rd rs1 vtypei) =
             else
                 if rd /= 0b00000
                 -- unsure if maxBound would remain correct for wider MachineWidths
-                    then executeVset False (fromImm (maxBound :: MachineInt)) (fromImm vtypei) rd
+                    then executeVset False maxUnsigned (fromImm vtypei) rd
                     else executeVset True (fromImm old_vl) (fromImm vtypei) rd 
 
 execute (Vsetvl rd rs1 rs2) = 
@@ -234,7 +234,7 @@ execute (Vsetvl rd rs1 rs2) =
                     executeVset False avl vtypei rd
                 else
                     if rd /= 0b00000
-                        then executeVset False (fromImm (maxBound :: MachineInt)) vtypei rd
+                        then executeVset False maxUnsigned vtypei rd
                         else executeVset True (fromImm old_vl) vtypei rd
      
 
@@ -268,7 +268,7 @@ execute (Vle width vd rs1 vm) =
                  baseMem <- getRegister rs1
                  mem <- loadUntranslatedBytes (baseMem + (fromImm (i * (eew `div` 8))))  (eew `div` 8)
                  when (vm == 0b1 || (testVectorBit vmask ( i)))  ((trace "got to this spot") $ (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) mem))
-                 when (vm == 0b0 && (not (testVectorBit vmask ( i))) && (vma == 0b1)) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8)) ))
+                 when (vm == 0b0 && (not (testVectorBit vmask ( i))) && (vma == 0b1)) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits)) ))
                  ((trace ("mem loaded " ++ show mem)) $ (setCSRField Field.VStart i)))
           ))
         when (vta == 0b1)
@@ -277,7 +277,7 @@ execute (Vle width vd rs1 vm) =
                     let realVd = vd + ( (i `div` eltsPerVReg))
                         realEltIdx = (i `mod` eltsPerVReg)
 
-                    in  (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8))))))
+                    in  (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits))))))
         setCSRField Field.VStart 0b0
                   
 
@@ -309,12 +309,12 @@ execute (Vaddvv vd vs1 vs2 vm) =
                vs1value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs1)) (fromImm ( realEltIdx))
                vs2value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs2)) (fromImm ( realEltIdx))
                let
-                 vs1Element :: MachineInt = (combineBytes (map int8_toWord8 vs1value))
-                 vs2Element :: MachineInt = (combineBytes (map int8_toWord8 vs2value))
+                 vs1Element = ((combineBytes :: [Word8] -> MachineInt) (map int8_toWord8 vs1value))
+                 vs2Element = ((combineBytes :: [Word8] -> MachineInt) (map int8_toWord8 vs2value))
                  vdElement = vs1Element + vs2Element
                (trace ("vs1, vs2, vd vaddvv values" ++ show (fromIntegral vs1Element) ++ " " ++ show (fromIntegral vs2Element) ++ " " ++ show (fromIntegral vdElement)) $ (setCSRField Field.VStart i))
                when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) (map word8_toInt8 (splitBytes (eew) vdElement)))
-               when (vm == 0b0 && (not (testVectorBit vmask i) && (vma == 0b1))) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8))))
+               when (vm == 0b0 && (not (testVectorBit vmask i) && (vma == 0b1))) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits))))
                setCSRField Field.VStart i
           )
         when (vta == 0b1) (forM_ [vl..(maxTail-1)]
@@ -322,7 +322,7 @@ execute (Vaddvv vd vs1 vs2 vm) =
                               let realVd = vd + ( (i `div` eltsPerVReg))
                                   realEltIdx = (i `mod` eltsPerVReg)
                               in do
-                                setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits :: Int8)))))
+                                setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits)))))
         setCSRField Field.VStart 0b0
 
 
