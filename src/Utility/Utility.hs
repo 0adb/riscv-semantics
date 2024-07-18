@@ -33,12 +33,13 @@ lower n x = (fromIntegral:: a -> b) $ bitSlice x 0 n
 combineBytes :: forall a. (Bits a, Integral a) => [Word8] -> a
 combineBytes bytes = foldr (\(x,n) res -> res .|. shiftL ((fromIntegral:: Word8 -> a) n) (8*x)) 0 $ zip [0..] bytes
 {-# INLINE combineBytes #-}
+{-# SPECIALIZE combineBytes :: [Word8] -> MachineInt #-}
 {-# SPECIALIZE combineBytes :: [Word8] -> Word64 #-}
 {-# SPECIALIZE combineBytes :: [Word8] -> Word32 #-}
 {-# SPECIALIZE combineBytes :: [Word8] -> Word16 #-}
 
-splitBytes :: forall a. (Bits a, Integral a) => Int -> a -> [Word8]
-splitBytes n w = map (fromIntegral:: a -> Word8)  [bitSlice w p (p + 8) | p <- [0,8..n-1]]
+splitBytes :: forall a i. (Bits a, Integral a, Integral i) => i -> a -> [Word8]
+splitBytes n w = map (fromIntegral:: a -> Word8)  [bitSlice w p (p + 8) | p <- (map (fromIntegral :: i -> Int) [0,8..n-1])]
 
 splitHalf :: (Bits a, Integral a) => a -> [Word8]
 splitHalf = splitBytes 16

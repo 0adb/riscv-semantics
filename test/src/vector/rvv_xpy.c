@@ -51,13 +51,11 @@ void xpy_int_rvv(size_t n, const int *x, int *y) {
 
 int main() {
   {
-    char *s = "begin\n";
+    char *s = "test1\n";
     char *p;
     for (p = s; p < s + 6; p++) putchar(*p);
   }
 
-  /*
-we know this part works correctly
   const int N = 17;
   char src[N];
   char golden[N];
@@ -74,17 +72,33 @@ we know this part works correctly
   
 
   for (int i = 0; i < N; i++) {
-    putchar(golden[i]);
+    
+    int val = golden[i];
+    while (val > 0) {
+      putchar('0' + (val % 10));
+      val = val / 10;
+    }
+    putchar(' ');
   }
   putchar('\n');
 
   for (int i = 0; i < N; i++) {
-    putchar(actual[i]);
+    
+    int val = actual[i];
+    while (val > 0) {
+      putchar('0' + (val % 10));
+      val = val / 10;
+    }
+    putchar(' ');
   }
   putchar('\n');
-  */
 
   
+  {
+    char *s = "test2\n";
+    char *p;
+    for (p = s; p < s + 6; p++) putchar(*p);
+  }
   const int N1 = 3;
   int src1[N1];
   int golden1[N1];
@@ -100,19 +114,23 @@ we know this part works correctly
   xpy_int_reference(N1, src1, golden1);
   xpy_int_rvv(N1, src1, actual1);
   for (int i = 0; i < N1; i++) {
-    putchar('0' + (golden1[i] / 100));
-    putchar('0' + (golden1[i] % 100) / 10);
-    putchar('0' + golden1[i] % 10);
+    int val = golden1[i];
+    while (val > 0) {
+      putchar('0' + (val % 10));
+      val = val / 10;
+    }
     putchar(' ');
   }
   putchar('\n');
 
   for (int i = 0; i < N1; i++) {
-    putchar('0' + (actual1[i] / 100));
-    putchar('0' + (actual1[i] % 100) / 10);
-    putchar('0' + actual1[i] % 10);
+    int val = actual1[i];
+    while (val > 0) {
+      putchar('0' + (val % 10));
+      val = val / 10;
+    }
     putchar(' ');
-  }
+  } 
   putchar('\n');
   
   
