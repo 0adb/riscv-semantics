@@ -12,7 +12,6 @@ import Data.Maybe
 import Control.Monad
 import Prelude
 import qualified Spec.CSRField as Field
-import Debug.Trace
 
 take_machineInt :: forall t. MachineInt -> [t] -> [t]
 take_machineInt i l = take (fromIntegral i) l
@@ -29,8 +28,8 @@ zeroToExclusive_machineInt max = map  (fromImm) [0..(max-1)]
 length_machineInt :: forall t. [t] -> MachineInt
 length_machineInt l = (fromIntegral (length l))
 
-maybeIndex_machineInt :: forall t. [t] -> MachineInt -> Maybe t
-maybeIndex_machineInt l idx = if (length_machineInt l > idx) then (Just (l !! (fromIntegral idx))) else Nothing
+index_machineInt :: forall t. [t] -> MachineInt -> t
+index_machineInt l idx = (l !! (fromIntegral idx))
 
 testBit_machineInt :: forall a. Bits a => a -> MachineInt -> Bool
 testBit_machineInt b idx = testBit b (fromIntegral idx)
@@ -87,7 +86,7 @@ legalSEW vsew vlmul vlenb =
     fromMaybe False $ do
         pow2SEW <- translateWidth_Vtype vsew
         pow2LMUL <- translateLMUL vlmul
-        trace ("pow2SEW " ++ show pow2SEW ++ " pow2LMUL "  ++ show pow2LMUL)$ (return (2 ^ pow2SEW <= ((2 ^ pow2LMUL) * vlenb * 8)))
+        (return (2 ^ pow2SEW <= ((2 ^ pow2LMUL) * vlenb * 8)))
 
 consistentRatio :: forall t. (MachineWidth t) => t -> t-> t -> t -> Bool
 consistentRatio vlmul vsew vlmul' vsew' =
@@ -128,7 +127,7 @@ executeVset noRatioCheck avl vtypei rd = do
     vlmul_old <- getCSRField Field.VLMul
     vsew_old <- getCSRField Field.VSEW
     vlenb <- getCSRField Field.VLenB
-    trace ("no Ratio Check " ++ show noRatioCheck) $ setCSRField Field.VLMul vlmul
+    setCSRField Field.VLMul vlmul
     setCSRField Field.VSEW vsew
     setCSRField Field.VMA vma
     setCSRField Field.VTA vta
@@ -140,7 +139,7 @@ executeVset noRatioCheck avl vtypei rd = do
         vlmax = computeVLMAX vlmul vsew (fromImm vlenb) 
         vl =  (if ( avl) <= vlmax then ( avl) else vlmax) in
         do
-          trace ("vl set, avl and vlmax are " ++ show (fromIntegral vl) ++ " " ++ show (fromIntegral avl) ++ " " ++ show (fromIntegral vlmax)) $ setCSRField Field.VL vl 
+          setCSRField Field.VL vl 
           setCSRField Field.VStart 0b0
           setCSRField Field.VIll vill
           unless (rd == 0b0) (setRegister rd vl)
@@ -165,13 +164,13 @@ getVRegisterElement eew baseReg eltIndex =
       vregValue <- getVRegister baseReg
       let value = take_machineInt ( eew) (drop_machineInt ( (eltIndex * eew)) vregValue) in
         if (length_machineInt value) == ( eew)
-        then (trace ("value loaded from vregister: " ++ show value ++ "at vregister " ++ show baseReg ++ " elt idx " ++ show eltIndex)) $ return value
+        then return value
         else raiseException 0 2 
       
   
 setVRegisterElement :: forall p t. (RiscvMachine p t) => MachineInt -> VRegister -> MachineInt -> [Int8] -> p ()
 setVRegisterElement eew baseReg eltIndex value =
-  ((trace ("eew, baseReg, eltIndex, value: " ++ show eew ++ " " ++ show baseReg ++ " " ++ show eltIndex ++ " " ++ show value)) $ (
+   
   if (and [(eew /= 1), (eew /= 2), (eew /= 4), (eew /= 8)])
   then
     raiseException 0 2 -- isInterrupt and exceptionCode arbitrary
@@ -184,27 +183,28 @@ setVRegisterElement eew baseReg eltIndex value =
             (value) ++
             (drop_machineInt ( ((eltIndex + 1) * eew)) vregValue) in
         if (length newVregValue) == (length vregValue)
-        then (trace ("value stored to vregister: " ++ show newVregValue ++ " at register idx " ++ show baseReg)) $ (setVRegister baseReg newVregValue)
-        else raiseException 0 2))
+        then  (setVRegister baseReg newVregValue)
+        else raiseException 0 2
 
 loadUntranslatedBytes :: forall p t. (RiscvMachine p t) => t -> MachineInt -> p [Int8]
-loadUntranslatedBytes memAddr numBytes = (trace ("memAddr, numBytes " ++ show (fromIntegral memAddr) ++ " " ++ show (fromIntegral numBytes)) ) $ (forM (zeroToExclusive_machineInt numBytes) (\i ->
+loadUntranslatedBytes memAddr numBytes =  (forM (zeroToExclusive_machineInt numBytes) (\i ->
                                                                  do
                                                                    addr <- (translate Load 1 (memAddr + (fromImm i)))
-                                                                   trace ("loading from address" ++ show (fromIntegral addr)) $ loadByte Execute addr))
+                                                                   loadByte Execute addr))
                                          
 storeUntranslatedBytes :: forall p t. (RiscvMachine p t) => t -> [Int8] -> p ()
-storeUntranslatedBytes memAddr value = forM_ (zeroToExclusive_machineInt (length_machineInt value)) (\i ->
-                                                                 do
-                                                                   addr <- (translate Store 1 (memAddr + (fromImm i)))
-                                                                   trace ("storing at address " ++ (show (fromIntegral addr)) ++ " the value " ++ show value ++ " and index " ++ show i) $ (storeByte Execute addr (fromMaybe 0 (maybeIndex_machineInt value i)))
-                                                                                                    ) 
+storeUntranslatedBytes memAddr value = forM_ (zeroToExclusive_machineInt (length_machineInt value))
+                                       (\i ->
+                                           do
+                                             addr <- translate Store 1 (memAddr + (fromImm i))
+                                             (storeByte Execute addr ((index_machineInt value i)))
+                                       ) 
 
 
 testVectorBit :: [Int8] -> MachineInt -> Bool
 testVectorBit vregValue posn = testBit_machineInt
-                               (fromMaybe 0
-                                (maybeIndex_machineInt vregValue  (posn `div` 8)))
+                               (
+                                (index_machineInt vregValue  (posn `div` 8)))
                                ((posn `mod` 8))
 
 execute :: forall p t. (RiscvMachine p t) => InstructionV -> p ()
@@ -255,30 +255,25 @@ execute (Vle width vd rs1 vm) =
     let eew = 2 ^ (fromMaybe 8 (translateWidth_Inst width))
         maxTail = computeMaxTail vlmul vlenb (eew) 
         eltsPerVReg = (vlenb * 8) `div` (eew)
-      in
-      do
-        (trace ("vstart " ++ show (fromIntegral vstart) ++ " vl " ++ show (fromIntegral vl))) $ (forM_ [vstart..(vl-1)]
+    do
+       forM_ [vstart..(vl-1)]
           (\i ->
-            let realVd = vd + ( (i `div` eltsPerVReg))
+            let realVd = vd + (i `div` eltsPerVReg)
                 realEltIdx = (i `mod` eltsPerVReg)
-            in
-              (trace ("real vd, real elt idx " ++ show realVd ++ " " ++ show realEltIdx))
-              $ (do
-             
-                 baseMem <- getRegister rs1
-                 mem <- loadUntranslatedBytes (baseMem + (fromImm (i * (eew `div` 8))))  (eew `div` 8)
-                 when (vm == 0b1 || (testVectorBit vmask ( i)))  ((trace "got to this spot") $ (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) mem))
-                 when (vm == 0b0 && (not (testVectorBit vmask ( i))) && (vma == 0b1)) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits)) ))
-                 ((trace ("mem loaded " ++ show mem)) $ (setCSRField Field.VStart i)))
-          ))
-        when (vta == 0b1)
-            (forM_ [vl..( (maxTail-1))]
-                  (\i ->
-                    let realVd = vd + ( (i `div` eltsPerVReg))
-                        realEltIdx = (i `mod` eltsPerVReg)
-
-                    in  (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits))))))
-        setCSRField Field.VStart 0b0
+            in do             
+               baseMem <- getRegister rs1
+               mem <- loadUntranslatedBytes (baseMem + (fromImm (i * (eew `div` 8))))  (eew `div` 8)
+               when (vm == 0b1 || (testVectorBit vmask ( i)))  ( (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) mem))
+               when (vm == 0b0 && (not (testVectorBit vmask ( i))) && (vma == 0b1)) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits)) ))
+               setCSRField Field.VStart i
+          )
+       when (vta == 0b1)
+         (forM_ [vl..( (maxTail-1))]
+           (\i ->
+               let realVd = vd + ( (i `div` eltsPerVReg))
+                   realEltIdx = (i `mod` eltsPerVReg)
+               in  (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits))))))
+       setCSRField Field.VStart 0b0
                   
 
 --   Vaddvv { vd :: VRegister, vs1 :: VRegister, vs2 :: VRegister, vm :: MachineInt } |
@@ -312,7 +307,7 @@ execute (Vaddvv vd vs1 vs2 vm) =
                  vs1Element = ((combineBytes :: [Word8] -> MachineInt) (map int8_toWord8 vs1value))
                  vs2Element = ((combineBytes :: [Word8] -> MachineInt) (map int8_toWord8 vs2value))
                  vdElement = vs1Element + vs2Element
-               (trace ("vs1, vs2, vd vaddvv values" ++ show (fromIntegral vs1Element) ++ " " ++ show (fromIntegral vs2Element) ++ " " ++ show (fromIntegral vdElement)) $ (setCSRField Field.VStart i))
+               ( (setCSRField Field.VStart i))
                when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) (map word8_toInt8 (splitBytes (eew) vdElement)))
                when (vm == 0b0 && (not (testVectorBit vmask i) && (vma == 0b1))) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits))))
                setCSRField Field.VStart i
@@ -366,7 +361,7 @@ execute (Vlr vd rs1 nf) =
          do
            baseMem <- getRegister rs1
            mem <- loadUntranslatedBytes (baseMem + (fromImm (vlenb * ( i)))) ( vlenb)
-           (trace ("setting vreg " ++ (show (vd + i)) ++ " with values " ++ (show mem))) $ setVRegister (vd + (i)) mem
+           setVRegister (vd + (i)) mem
            ))
 execute (Vsr vs3 rs1 nf) =
   let
@@ -379,6 +374,6 @@ execute (Vsr vs3 rs1 nf) =
          do
            baseMem <- getRegister rs1
            value <- getVRegister (vs3 + ( i))
-           (trace ("getting vreg " ++ (show (vs3 + i)) ++ " with values " ++ (show value))) $ storeUntranslatedBytes (baseMem + fromImm (vlenb * ( i))) value
+           storeUntranslatedBytes (baseMem + fromImm (vlenb * ( i))) value
            ))
 
