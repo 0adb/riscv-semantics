@@ -109,7 +109,7 @@ computeVLMAX vlmul vsew vlenb =
             if exp >= 0 then
               return (vlenb * (2 ^ (exp)))
             else
-              return (vlenb `div` (2 ^ (-exp))))
+              return (vlenb `quot` (2 ^ (-exp))))
 
 computeMaxTail :: forall t. (MachineWidth t) => t -> t -> t -> t
 computeMaxTail vlmul vlenb vsew =
@@ -182,7 +182,7 @@ setVRegisterElement eew baseReg eltIndex value =
             (take_machineInt ( (eltIndex * eew)) vregValue) ++
             (value) ++
             (drop_machineInt ( ((eltIndex + 1) * eew)) vregValue) in
-        if (length newVregValue) == (length vregValue)
+        if (length_machineInt newVregValue) == (length_machineInt vregValue)
         then  (setVRegister baseReg newVregValue)
         else raiseException 0 2
 
@@ -204,8 +204,8 @@ storeUntranslatedBytes memAddr value = forM_ (zeroToExclusive_machineInt (length
 testVectorBit :: [Int8] -> MachineInt -> Bool
 testVectorBit vregValue posn = testBit_machineInt
                                (
-                                (index_machineInt vregValue  (posn `div` 8)))
-                               ((posn `mod` 8))
+                                (index_machineInt vregValue  (posn `quot` 8)))
+                               ((posn `rem` 8))
 
 execute :: forall p t. (RiscvMachine p t) => InstructionV -> p ()
 
@@ -254,25 +254,25 @@ execute (Vle width vd rs1 vm) =
     vmask <- getVRegister 0
     let eew = 2 ^ (fromMaybe 8 (translateWidth_Inst width))
         maxTail = computeMaxTail vlmul vlenb (eew) 
-        eltsPerVReg = (vlenb * 8) `div` (eew)
+        eltsPerVReg = (vlenb * 8) `quot` (eew)
     do
        forM_ [vstart..(vl-1)]
           (\i ->
-            let realVd = vd + (i `div` eltsPerVReg)
-                realEltIdx = (i `mod` eltsPerVReg)
+            let realVd = vd + (i `quot` eltsPerVReg)
+                realEltIdx = (i `rem` eltsPerVReg)
             in do             
                baseMem <- getRegister rs1
-               mem <- loadUntranslatedBytes (baseMem + (fromImm (i * (eew `div` 8))))  (eew `div` 8)
-               when (vm == 0b1 || (testVectorBit vmask ( i)))  ( (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) mem))
-               when (vm == 0b0 && (not (testVectorBit vmask ( i))) && (vma == 0b1)) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits)) ))
+               mem <- loadUntranslatedBytes (baseMem + (fromImm (i * (eew `quot` 8))))  (eew `quot` 8)
+               when (vm == 0b1 || (testVectorBit vmask ( i)))  ( (setVRegisterElement (fromImm ( (eew `quot` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) mem))
+               when (vm == 0b0 && (not (testVectorBit vmask ( i))) && (vma == 0b1)) (setVRegisterElement (fromImm ( (eew `quot` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `quot` 8) (complement (zeroBits)) ))
                setCSRField Field.VStart i
           )
        when (vta == 0b1)
          (forM_ [vl..( (maxTail-1))]
            (\i ->
-               let realVd = vd + ( (i `div` eltsPerVReg))
-                   realEltIdx = (i `mod` eltsPerVReg)
-               in  (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits))))))
+               let realVd = vd + ( (i `quot` eltsPerVReg))
+                   realEltIdx = (i `rem` eltsPerVReg)
+               in  (setVRegisterElement (fromImm ( (eew `quot` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `quot` 8) (complement (zeroBits))))))
        setCSRField Field.VStart 0b0
                   
 
@@ -290,34 +290,34 @@ execute (Vaddvv vd vs1 vs2 vm) =
 
     let eew = 2 ^ (fromMaybe 0 (translateWidth_Vtype vsew)) 
         maxTail = computeMaxTail vlmul vlenb (eew) 
-        eltsPerVReg = (vlenb * 8) `div` (eew)
+        eltsPerVReg = (vlenb * 8) `quot` (eew)
       in
       do
         forM_ [vstart..(vl-1)]
           (\i ->
              do
                let
-                 realVd = vd + ( (i `div` eltsPerVReg))
-                 realVs1 = vs1 + ( (i `div` eltsPerVReg))
-                 realVs2 = vs2 + ( (i `div` eltsPerVReg))
-                 realEltIdx = (i `mod` eltsPerVReg)
-               vs1value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs1)) (fromImm ( realEltIdx))
-               vs2value <- getVRegisterElement (fromImm (eew `div` 8)) (fromImm ( realVs2)) (fromImm ( realEltIdx))
+                 realVd = vd + ( (i `quot` eltsPerVReg))
+                 realVs1 = vs1 + ( (i `quot` eltsPerVReg))
+                 realVs2 = vs2 + ( (i `quot` eltsPerVReg))
+                 realEltIdx = (i `rem` eltsPerVReg)
+               vs1value <- getVRegisterElement (fromImm (eew `quot` 8)) (fromImm ( realVs1)) (fromImm ( realEltIdx))
+               vs2value <- getVRegisterElement (fromImm (eew `quot` 8)) (fromImm ( realVs2)) (fromImm ( realEltIdx))
                let
                  vs1Element = ((combineBytes :: [Word8] -> MachineInt) (map int8_toWord8 vs1value))
                  vs2Element = ((combineBytes :: [Word8] -> MachineInt) (map int8_toWord8 vs2value))
                  vdElement = vs1Element + vs2Element
                ( (setCSRField Field.VStart i))
-               when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `div` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) (map word8_toInt8 (splitBytes (eew) vdElement)))
-               when (vm == 0b0 && (not (testVectorBit vmask i) && (vma == 0b1))) (setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits))))
+               when (vm == 0b1 || (testVectorBit vmask i)) (setVRegisterElement (fromImm (eew `quot` 8)) (fromImm (realVd)) (fromImm ( realEltIdx)) (map word8_toInt8 (splitBytes (eew) vdElement)))
+               when (vm == 0b0 && (not (testVectorBit vmask i) && (vma == 0b1))) (setVRegisterElement (fromImm ( (eew `quot` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `quot` 8) (complement (zeroBits))))
                setCSRField Field.VStart i
           )
         when (vta == 0b1) (forM_ [vl..(maxTail-1)]
                            (\i ->
-                              let realVd = vd + ( (i `div` eltsPerVReg))
-                                  realEltIdx = (i `mod` eltsPerVReg)
+                              let realVd = vd + ( (i `quot` eltsPerVReg))
+                                  realEltIdx = (i `rem` eltsPerVReg)
                               in do
-                                setVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `div` 8) (complement (zeroBits)))))
+                                setVRegisterElement (fromImm ( (eew `quot` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `quot` 8) (complement (zeroBits)))))
         setCSRField Field.VStart 0b0
 
 
@@ -334,18 +334,18 @@ execute (Vse width vd rs1 vm) =
     vmask <- getVRegister 0
     let eew = 2 ^ (fromMaybe 8 (translateWidth_Inst width)) 
         maxTail = computeMaxTail vlmul vlenb (eew) 
-        eltsPerVReg = (vlenb * 8) `div` (eew)
+        eltsPerVReg = (vlenb * 8) `quot` (eew)
       in
       do
         forM_ [vstart..(vl-1)]
           (\i -> 
-            let realVd = vd + ( (i `div` eltsPerVReg))
-                realEltIdx = (i `mod` eltsPerVReg)
+            let realVd = vd + ( (i `quot` eltsPerVReg))
+                realEltIdx = (i `rem` eltsPerVReg)
             in
               do
                  baseMem <- getRegister rs1
-                 value <- getVRegisterElement (fromImm ( (eew `div` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx))
-                 storeUntranslatedBytes (baseMem + (fromImm (i * ( (eew `div` 8)))))  value
+                 value <- getVRegisterElement (fromImm ( (eew `quot` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx))
+                 storeUntranslatedBytes (baseMem + (fromImm (i * ( (eew `quot` 8)))))  value
                  setCSRField Field.VStart i
           )
         setCSRField Field.VStart 0b0
@@ -355,7 +355,7 @@ execute (Vlr vd rs1 nf) =
     numFields = fromMaybe 9 $ translateNumFields nf in
   do
     vlenb <- getCSRField Field.VLenB
-    when (((numFields == 1) || (numFields == 2) || (numFields == 4) || (numFields == 8)) && (( vd) `mod` numFields == 0))
+    when (((numFields == 1) || (numFields == 2) || (numFields == 4) || (numFields == 8)) && (( vd) `rem` numFields == 0))
       (forM_ [0..(numFields-1)]
       (\i ->
          do
@@ -368,7 +368,7 @@ execute (Vsr vs3 rs1 nf) =
     numFields = fromMaybe 9 $ translateNumFields nf in
   do
     vlenb <- getCSRField Field.VLenB
-    when (((numFields == 1) || (numFields == 2) || (numFields == 4) || (numFields == 8)) && (( vs3) `mod` numFields == 0))
+    when (((numFields == 1) || (numFields == 2) || (numFields == 4) || (numFields == 8)) && (( vs3) `rem` numFields == 0))
       (forM_ [0..(numFields-1)]
       (\i ->
          do
