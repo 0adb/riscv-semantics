@@ -41,7 +41,7 @@ word8_toInt8 :: Word8 -> Int8
 word8_toInt8 n = (fromIntegral:: Word8 -> Int8) n
 
 
-translateLMUL :: forall t. (MachineWidth t) => t -> Maybe MachineInt
+translateLMUL :: MachineInt -> Maybe MachineInt
 translateLMUL 0b101 = Just (-3)
 translateLMUL 0b110 = Just (-2)
 translateLMUL 0b111 = Just (-1)
@@ -53,14 +53,14 @@ translateLMUL _ = Nothing
 
 
 
-translateWidth_Vtype :: forall t. (MachineWidth t) => t -> Maybe MachineInt
+translateWidth_Vtype :: MachineInt -> Maybe MachineInt
 translateWidth_Vtype 0b000 = Just 3
 translateWidth_Vtype 0b001 = Just 4
 translateWidth_Vtype 0b010 = Just 5
 translateWidth_Vtype 0b011 = Just 6
 translateWidth_Vtype _ = Nothing
 
-translateWidth_Inst :: forall t. (MachineWidth t) => t -> Maybe MachineInt
+translateWidth_Inst :: MachineInt -> Maybe MachineInt
 translateWidth_Inst 0b000 = Just 3
 translateWidth_Inst 0b101 = Just 4
 translateWidth_Inst 0b110 = Just 5
@@ -79,7 +79,7 @@ translateNumFields 0b111 = Just 8
 translateNumFields _  = Nothing
 
 
-legalSEW :: forall t. (MachineWidth t) => t -> t -> t -> Bool
+legalSEW ::  MachineInt -> MachineInt -> MachineInt -> Bool
 -- We are checking that vsew (bits) <= vlmul * vlenb * 8 (everything in bits)
 -- which in this case is (2 raised to (pow2SEW) <= 2 raised to (pow2LMUL) times vlenb times 8)
 legalSEW vsew vlmul vlenb =
@@ -88,7 +88,7 @@ legalSEW vsew vlmul vlenb =
         pow2LMUL <- translateLMUL vlmul
         (return (2 ^ pow2SEW <= ((2 ^ pow2LMUL) * vlenb * 8)))
 
-consistentRatio :: forall t. (MachineWidth t) => t -> t-> t -> t -> Bool
+consistentRatio :: MachineInt -> MachineInt -> MachineInt -> MachineInt -> Bool
 consistentRatio vlmul vsew vlmul' vsew' =
     fromMaybe False $ do
         pow2SEW <- translateWidth_Vtype vsew
@@ -100,7 +100,7 @@ consistentRatio vlmul vsew vlmul' vsew' =
 -- If invalid VLMUL or VSEW, will return 0, which for general intents and purposes should be
 -- okay.
 -- Not implementing here the restriction that LMUL < SEW_min/ELEN is undefined behavior. 
-computeVLMAX ::  forall t. (MachineWidth t) => t -> t -> t -> t
+computeVLMAX ::  MachineInt -> MachineInt -> MachineInt -> MachineInt
 computeVLMAX vlmul vsew vlenb =
   fromMaybe 0 $ do
         pow2SEW <- translateWidth_Vtype vsew
@@ -111,7 +111,7 @@ computeVLMAX vlmul vsew vlenb =
             else
               return (vlenb `quot` (2 ^ (-exp))))
 
-computeMaxTail :: forall t. (MachineWidth t) => t -> t -> t -> t
+computeMaxTail :: MachineInt -> MachineInt ->  MachineInt -> MachineInt
 computeMaxTail vlmul vlenb vsew =
     fromMaybe 0 $ do
         pow2SEW <- translateWidth_Vtype vsew
@@ -122,7 +122,7 @@ computeMaxTail vlmul vlenb vsew =
            else return 0
 
 
-executeVset :: forall p t. (RiscvMachine p t) => Bool -> t -> t -> Register -> p ()
+executeVset :: forall p t. (RiscvMachine p t) => Bool -> MachineInt -> MachineInt -> Register -> p ()
 executeVset noRatioCheck avl vtypei rd = do
     vlmul_old <- getCSRField Field.VLMul
     vsew_old <- getCSRField Field.VSEW
@@ -130,10 +130,9 @@ executeVset noRatioCheck avl vtypei rd = do
     setCSRField Field.VLMul vlmul
     setCSRField Field.VSEW vsew
     setCSRField Field.VMA vma
-    setCSRField Field.VTA vta
-    
-    let vill = (if (legalSEW vsew vlmul (fromImm vlenb) && 
-                    (noRatioCheck
+    setCSRField Field.VTA vta    
+    let vill = (if (legalSEW vsew vlmul vlenb && 
+                  (noRatioCheck
                      || (consistentRatio (fromImm vlmul_old) (fromImm vsew_old) vlmul vsew))
                    ) then 0b0 else 0b1) 
         vlmax = computeVLMAX vlmul vsew (fromImm vlenb) 
@@ -142,7 +141,7 @@ executeVset noRatioCheck avl vtypei rd = do
           setCSRField Field.VL vl 
           setCSRField Field.VStart 0b0
           setCSRField Field.VIll vill
-          unless (rd == 0b0) (setRegister rd vl)
+          unless (rd == 0b0) (setRegister rd (fromImm vl))
     where
         vlmul = (bitSlice vtypei 0 3)
         vsew = (bitSlice vtypei 3 6)
@@ -216,12 +215,11 @@ execute (Vsetvli rd rs1 vtypei) =
             then
                 do
                     avl <- getRegister rs1
-                    executeVset False avl (fromImm vtypei) rd
+                    executeVset False (regToInt64 avl) vtypei rd
             else
-                if rd /= 0b00000
-                -- unsure if maxBound would remain correct for wider MachineWidths
-                    then executeVset False maxUnsigned (fromImm vtypei) rd
-                    else executeVset True (fromImm old_vl) (fromImm vtypei) rd 
+                if rd /= 0b00000 
+                    then executeVset False (regToInt64 (maxSigned :: t)) vtypei rd
+                    else executeVset True (regToInt64 (maxSigned :: t)) vtypei rd 
 
 execute (Vsetvl rd rs1 rs2) = 
     do
@@ -231,15 +229,15 @@ execute (Vsetvl rd rs1 rs2) =
             then
                 do
                     avl <- getRegister rs1
-                    executeVset False avl vtypei rd
+                    executeVset False (regToInt64 avl) (regToInt64 vtypei) rd
                 else
                     if rd /= 0b00000
-                        then executeVset False maxUnsigned vtypei rd
-                        else executeVset True (fromImm old_vl) vtypei rd
+                        then executeVset False (regToInt64 (maxSigned :: t)) (regToInt64 vtypei) rd
+                        else executeVset True old_vl (regToInt64 vtypei) rd
      
 
 
-execute (Vsetivli rd uimm vtypei) = executeVset False (fromImm uimm) (fromImm vtypei) rd
+execute (Vsetivli rd uimm vtypei) = executeVset False uimm vtypei rd
 
 
 
