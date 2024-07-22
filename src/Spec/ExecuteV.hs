@@ -42,41 +42,55 @@ word8_toInt8 n = (fromIntegral:: Word8 -> Int8) n
 
 
 translateLMUL :: MachineInt -> Maybe MachineInt
-translateLMUL 0b101 = Just (-3)
-translateLMUL 0b110 = Just (-2)
-translateLMUL 0b111 = Just (-1)
-translateLMUL 0b000 = Just (0)
-translateLMUL 0b001 = Just 1
-translateLMUL 0b010 = Just 2
-translateLMUL 0b011 = Just 3
-translateLMUL _ = Nothing
+translateLMUL enc = dec
+  where
+    dec
+      | enc == 0b101 = Just (-3)
+      | enc == 0b110 = Just (-2)
+      | enc == 0b111 = Just (-1)
+      | enc == 0b000 = Just (0)
+      | enc == 0b001 = Just 1
+      | enc == 0b010 = Just 2
+      | enc == 0b011 = Just 3
+      | True = Nothing
 
 
 
 translateWidth_Vtype :: MachineInt -> Maybe MachineInt
-translateWidth_Vtype 0b000 = Just 3
-translateWidth_Vtype 0b001 = Just 4
-translateWidth_Vtype 0b010 = Just 5
-translateWidth_Vtype 0b011 = Just 6
-translateWidth_Vtype _ = Nothing
+translateWidth_Vtype enc = dec
+  where
+    dec
+      | enc==0b000 = Just 3
+      | enc==0b001 = Just 4
+      | enc==0b010 = Just 5
+      | enc==0b011 = Just 6
+      | True = Nothing
+
+
 
 translateWidth_Inst :: MachineInt -> Maybe MachineInt
-translateWidth_Inst 0b000 = Just 3
-translateWidth_Inst 0b101 = Just 4
-translateWidth_Inst 0b110 = Just 5
-translateWidth_Inst 0b111 = Just 6
-translateWidth_Inst _ = Nothing
-
+translateWidth_Inst enc = dec
+  where
+    dec
+      | enc==0b000 = Just 3
+      | enc==0b101 = Just 4
+      | enc==0b110 = Just 5
+      | enc==0b111 = Just 6
+      | True = Nothing
+      
 translateNumFields :: MachineInt -> Maybe MachineInt
-translateNumFields 0b000 = Just 1
-translateNumFields 0b001 = Just 2
-translateNumFields 0b010 = Just 3
-translateNumFields 0b011 = Just 4
-translateNumFields 0b100 = Just 5
-translateNumFields 0b101 = Just 6
-translateNumFields 0b110 = Just 7
-translateNumFields 0b111 = Just 8
-translateNumFields _  = Nothing
+translateNumFields enc = dec
+  where
+    dec
+      | enc == 0b000 = Just 1
+      | enc == 0b001 = Just 2
+      | enc == 0b010 = Just 3
+      | enc == 0b011 = Just 4
+      | enc == 0b100 = Just 5
+      | enc == 0b101 = Just 6
+      | enc == 0b110 = Just 7
+      | enc == 0b111 = Just 8
+      | True  = Nothing
 
 
 legalSEW ::  MachineInt -> MachineInt -> MachineInt -> Bool
@@ -154,7 +168,7 @@ executeVset noRatioCheck avl vtypei rd = do
 -- (to consider, if, say, accessing a register group of multiple registers)
 getVRegisterElement :: forall p t. (RiscvMachine p t) => MachineInt -> VRegister -> MachineInt -> p [Int8]
 getVRegisterElement eew baseReg eltIndex =
-  if (and [(eew /= 1), (eew /= 2), (eew /= 4), (eew /= 8)])
+  if (eew == 1 || eew == 2 || eew == 4 || eew == 8)
   then
     raiseException 0 2 -- isInterrupt and exceptionCode arbitrary
   else
@@ -170,7 +184,7 @@ getVRegisterElement eew baseReg eltIndex =
 setVRegisterElement :: forall p t. (RiscvMachine p t) => MachineInt -> VRegister -> MachineInt -> [Int8] -> p ()
 setVRegisterElement eew baseReg eltIndex value =
    
-  if (and [(eew /= 1), (eew /= 2), (eew /= 4), (eew /= 8)])
+  if (eew == 1 || eew == 2 || eew == 4 || eew == 8)
   then
     raiseException 0 2 -- isInterrupt and exceptionCode arbitrary
   else
@@ -375,3 +389,5 @@ execute (Vsr vs3 rs1 nf) =
            storeUntranslatedBytes (baseMem + fromImm (vlenb * ( i))) value
            ))
 
+
+execute inst = error $ "dispatch bug: " ++ show inst
