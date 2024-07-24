@@ -170,24 +170,21 @@ getVRegisterElement :: forall p t. (RiscvMachine p t) => MachineInt -> VRegister
 getVRegisterElement eew baseReg eltIndex =
   if (eew == 1 || eew == 2 || eew == 4 || eew == 8)
   then
-    raiseException 0 2 -- isInterrupt and exceptionCode arbitrary
-  else
     do
       vlenb <- getCSRField Field.VLenB
       vregValue <- getVRegister baseReg
       let value = take_machineInt ( eew) (drop_machineInt ( (eltIndex * eew)) vregValue) in
         if (length_machineInt value) == ( eew)
         then return value
-        else raiseException 0 2 
+        else raiseException 0 2
+  else
+    raiseException 0 2
       
   
 setVRegisterElement :: forall p t. (RiscvMachine p t) => MachineInt -> VRegister -> MachineInt -> [Int8] -> p ()
 setVRegisterElement eew baseReg eltIndex value =
-   
   if (eew == 1 || eew == 2 || eew == 4 || eew == 8)
   then
-    raiseException 0 2 -- isInterrupt and exceptionCode arbitrary
-  else
     do
       vlenb <- getCSRField Field.VLenB
       vregValue <- getVRegister baseReg
@@ -198,6 +195,7 @@ setVRegisterElement eew baseReg eltIndex value =
         if (length_machineInt newVregValue) == (length_machineInt vregValue)
         then  (setVRegister baseReg newVregValue)
         else raiseException 0 2
+   else raiseException 0 2
 
 loadUntranslatedBytes :: forall p t. (RiscvMachine p t) => t -> MachineInt -> p [Int8]
 loadUntranslatedBytes memAddr numBytes =  (forM (zeroToExclusive_machineInt numBytes) (\i ->
