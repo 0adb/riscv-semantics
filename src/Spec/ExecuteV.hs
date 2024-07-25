@@ -147,9 +147,9 @@ executeVset noRatioCheck avl vtypei rd = do
     setCSRField Field.VTA vta    
     let vill = (if (legalSEW vsew vlmul vlenb && 
                   (noRatioCheck
-                     || (consistentRatio (fromImm vlmul_old) (fromImm vsew_old) vlmul vsew))
+                     || (consistentRatio vlmul_old vsew_old vlmul vsew))
                    ) then 0b0 else 0b1) 
-        vlmax = computeVLMAX vlmul vsew (fromImm vlenb) 
+        vlmax = computeVLMAX vlmul vsew vlenb 
         vl =  (if ( avl) <= vlmax then ( avl) else vlmax) in
         do
           setCSRField Field.VL vl 
@@ -197,17 +197,21 @@ setVRegisterElement eew baseReg eltIndex value =
         else raiseException 0 2
    else raiseException 0 2
 
+
+translateOffsetAddr :: forall t. MachineWidth t => t -> MachineInt -> t
+translateOffsetAddr memAddr i = memAddr + (fromImm i)
+
 loadUntranslatedBytes :: forall p t. (RiscvMachine p t) => t -> MachineInt -> p [Int8]
 loadUntranslatedBytes memAddr numBytes =  (forM (zeroToExclusive_machineInt numBytes) (\i ->
                                                                  do
-                                                                   addr <- (translate Load 1 (memAddr + (fromImm i)))
+                                                                   addr <- (translate Load 1 (translateOffsetAddr memAddr i))
                                                                    loadByte Execute addr))
                                          
 storeUntranslatedBytes :: forall p t. (RiscvMachine p t) => t -> [Int8] -> p ()
 storeUntranslatedBytes memAddr value = forM_ (zeroToExclusive_machineInt (length_machineInt value))
                                        (\i ->
                                            do
-                                             addr <- translate Store 1 (memAddr + (fromImm i))
+                                             addr <- translate Store 1 (translateOffsetAddr memAddr i)
                                              (storeByte Execute addr ((index_machineInt value i)))
                                        ) 
 
@@ -272,7 +276,7 @@ execute (Vle width vd rs1 vm) =
                 realEltIdx = (i `rem` eltsPerVReg)
             in do             
                baseMem <- getRegister rs1
-               mem <- loadUntranslatedBytes (baseMem + (fromImm (i * (eew `quot` 8))))  (eew `quot` 8)
+               mem <- loadUntranslatedBytes (translateOffsetAddr baseMem (i * (eew `quot` 8)))  (eew `quot` 8)
                when (vm == 0b1 || (testVectorBit vmask ( i)))  ( (setVRegisterElement (fromImm ( (eew `quot` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) mem))
                when (vm == 0b0 && (not (testVectorBit vmask ( i))) && (vma == 0b1)) (setVRegisterElement (fromImm ( (eew `quot` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx)) (replicate_machineInt (eew `quot` 8) (complement (zeroBits)) ))
                setCSRField Field.VStart i
@@ -355,7 +359,7 @@ execute (Vse width vd rs1 vm) =
               do
                  baseMem <- getRegister rs1
                  value <- getVRegisterElement (fromImm ( (eew `quot` 8))) (fromImm ( realVd)) (fromImm ( realEltIdx))
-                 storeUntranslatedBytes (baseMem + (fromImm (i * ( (eew `quot` 8)))))  value
+                 storeUntranslatedBytes (translateOffsetAddr baseMem (i * (eew `quot` 8)))  value
                  setCSRField Field.VStart i
           )
         setCSRField Field.VStart 0b0
@@ -370,7 +374,7 @@ execute (Vlr vd rs1 nf) =
       (\i ->
          do
            baseMem <- getRegister rs1
-           mem <- loadUntranslatedBytes (baseMem + (fromImm (vlenb * ( i)))) ( vlenb)
+           mem <- loadUntranslatedBytes  (translateOffsetAddr baseMem (i * (vlenb))) ( vlenb)
            setVRegister (vd + (i)) mem
            ))
 execute (Vsr vs3 rs1 nf) =
@@ -384,7 +388,7 @@ execute (Vsr vs3 rs1 nf) =
          do
            baseMem <- getRegister rs1
            value <- getVRegister (vs3 + ( i))
-           storeUntranslatedBytes (baseMem + fromImm (vlenb * ( i))) value
+           storeUntranslatedBytes   (translateOffsetAddr baseMem (i * (vlenb)))  value
            ))
 
 
